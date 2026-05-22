@@ -19,6 +19,7 @@
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -363,11 +364,14 @@ namespace settings {
     m_headerRow = header.get();
 
     const std::string lane = laneLabel(m_lanePath.empty() ? "" : m_lanePath.back());
-    const std::string title =
-        m_createFormVisible
-            ? i18n::tr("settings.entities.widget.inspector.add-instance-title", "widget", m_createLabel, "lane", lane)
-            : i18n::tr("settings.entities.widget.inspector.add-title", "lane", lane);
-    header->addChild(makeLabel(title, Style::fontSizeBody * m_scale, colorSpecFromRole(ColorRole::OnSurface), true));
+    const std::string title = m_createFormVisible
+                                  ? instanceFormTitle()
+                                  : i18n::tr("settings.entities.widget.inspector.add-title", "lane", lane);
+    auto titleLabel = makeLabel(title, Style::fontSizeBody * m_scale, colorSpecFromRole(ColorRole::OnSurface), true);
+    if (m_createFormVisible) {
+      titleLabel->setMaxLines(2);
+    }
+    header->addChild(std::move(titleLabel));
 
     auto spacer = std::make_unique<Flex>();
     spacer->setFlexGrow(1.0f);
@@ -447,7 +451,6 @@ namespace settings {
     auto instanceDescription =
         makeLabel(i18n::tr("settings.entities.widget.instance.id-description"), Style::fontSizeCaption * m_scale,
                   colorSpecFromRole(ColorRole::OnSurfaceVariant));
-    instanceDescription->setMaxWidth(320.0f * m_scale);
     instanceDescription->setMaxLines(2);
     instanceDescription->setVisible(false);
     instanceDescription->setParticipatesInLayout(false);
@@ -459,7 +462,6 @@ namespace settings {
     instanceInput->setFontSize(Style::fontSizeBody * m_scale);
     instanceInput->setControlHeight(Style::controlHeight * m_scale);
     instanceInput->setHorizontalPadding(Style::spaceSm * m_scale);
-    instanceInput->setSize(260.0f * m_scale, Style::controlHeight * m_scale);
     instanceInput->setVisible(false);
     instanceInput->setParticipatesInLayout(false);
     instanceInput->setOnChange([this](const std::string& /*value*/) {
@@ -522,11 +524,43 @@ namespace settings {
     m_root->layout(*renderContext());
   }
 
+  std::string WidgetAddPopup::instanceFormTitle() const {
+    const std::string lane = laneLabel(m_lanePath.empty() ? "" : m_lanePath.back());
+    return i18n::tr("settings.entities.widget.inspector.add-instance-title", "widget", m_createLabel, "lane", lane);
+  }
+
   std::pair<float, float> WidgetAddPopup::popupSize() const {
-    if (m_createFormVisible) {
-      return {360.0f * m_scale, 190.0f * m_scale};
+    constexpr float kPickerWidth = 520.0f;
+    constexpr float kPickerHeight = 420.0f;
+    constexpr float kCreateMinWidth = 360.0f;
+    constexpr float kCreateHeight = 190.0f;
+    constexpr float kCreateMaxWidth = 640.0f;
+    constexpr float kParentMargin = 48.0f;
+
+    if (!m_createFormVisible) {
+      return {kPickerWidth * m_scale, kPickerHeight * m_scale};
     }
-    return {520.0f * m_scale, 420.0f * m_scale};
+
+    float contentWidth = kCreateMinWidth * m_scale;
+    if (m_renderContext != nullptr && !m_createLabel.empty()) {
+      const float fontSize = Style::fontSizeBody * m_scale;
+      const TextMetrics titleMetrics = m_renderContext->measureText(instanceFormTitle(), fontSize, true);
+      const float closeBtn = Style::controlHeightSm * m_scale;
+      const float headerGap = Style::spaceSm * m_scale;
+      const float rootPadding = Style::spaceSm * m_scale * 2.0f;
+      const float sheetPadding = computePadding(m_scale) * 2.0f;
+
+      const float measured = titleMetrics.width + headerGap + closeBtn + rootPadding + sheetPadding;
+
+      float maxWidth = kCreateMaxWidth * m_scale;
+      if (m_parentWidth > 0) {
+        maxWidth = std::min(maxWidth, std::max(kCreateMinWidth * m_scale,
+                                               static_cast<float>(m_parentWidth) * m_scale - kParentMargin * m_scale));
+      }
+      contentWidth = std::clamp(measured, kCreateMinWidth * m_scale, maxWidth);
+    }
+
+    return {contentWidth, kCreateHeight * m_scale};
   }
 
   void WidgetAddPopup::reopenForCurrentMode() {

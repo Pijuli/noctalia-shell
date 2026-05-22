@@ -95,17 +95,34 @@ void AudioVisualizerWidget::onFrameTick(float deltaMs) {
   }
   syncSpectrum();
   m_visualizer->tick(deltaMs);
+  if (m_visible && (!m_visualizer->converged() || (m_spectrum != nullptr && !m_spectrum->idle()))) {
+    requestRedraw();
+  }
 }
 
 bool AudioVisualizerWidget::needsFrameTick() const {
-  // Bar visualizers redraw the full bar surface. Let PipeWire/FFT updates set
-  // the cadence instead of chasing smoothing at the output refresh rate.
-  return m_visualizer != nullptr &&
-         (m_pendingSpectrumUpdate || shouldBeVisible() != m_visible || m_fadingOut || m_visibilityAnimId != 0);
+  if (m_visualizer == nullptr) {
+    return false;
+  }
+  if (m_pendingSpectrumUpdate || shouldBeVisible() != m_visible || m_fadingOut || m_visibilityAnimId != 0) {
+    return true;
+  }
+  if (!m_visible) {
+    return false;
+  }
+  if (!m_visualizer->converged()) {
+    return true;
+  }
+  // Keep ticking while audio is active so every visualizer reads fresh band data.
+  return m_spectrum != nullptr && !m_spectrum->idle();
 }
 
 void AudioVisualizerWidget::syncSpectrum() {
-  if (!m_pendingSpectrumUpdate || m_visualizer == nullptr || m_spectrum == nullptr || m_listenerId == 0) {
+  if (m_visualizer == nullptr || m_spectrum == nullptr || m_listenerId == 0) {
+    return;
+  }
+  const bool shouldPull = m_pendingSpectrumUpdate || (m_visible && !m_spectrum->idle());
+  if (!shouldPull) {
     return;
   }
 

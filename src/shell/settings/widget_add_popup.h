@@ -82,6 +82,7 @@ namespace settings {
     void beginCreateFlow(const SearchPickerOption& option);
     void finishCreateFlow();
     void reopenForCurrentMode();
+    [[nodiscard]] std::string instanceFormTitle() const;
     [[nodiscard]] std::pair<float, float> popupSize() const;
     [[nodiscard]] std::string suggestedInstanceId(std::string_view type) const;
     [[nodiscard]] bool canCreateInstanceId(std::string_view id) const;

@@ -734,7 +734,7 @@ void Surface::requestRedraw() {
 }
 
 void Surface::requestFrameTick() {
-  if (!m_running || !m_configured || m_frameCallback != nullptr || m_inFrameHandler || m_inPrepareFrame) {
+  if (!m_running || !m_configured) {
     return;
   }
 
@@ -743,6 +743,15 @@ void Surface::requestFrameTick() {
   if (m_lastFrameAt.has_value()) {
     deltaMs = std::chrono::duration<float, std::milli>(now - *m_lastFrameAt).count();
   }
+
+  if (m_frameCallback != nullptr || m_inFrameHandler || m_inPrepareFrame) {
+    // Defer to handleFrameDone / the next drain, but keep the tick intent so
+    // coalesced spectrum callbacks are not lost while a frame is in flight.
+    m_frameTickPending = true;
+    m_pendingFrameDeltaMs = deltaMs;
+    return;
+  }
+
   m_lastFrameAt = now;
   queueFrameWork(true, deltaMs);
 }

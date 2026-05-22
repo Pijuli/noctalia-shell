@@ -41,6 +41,7 @@ private:
   void doUpdate(Renderer& renderer) override;
   void refresh(Renderer& renderer);
   void clearArt(Renderer& renderer);
+  void commitPendingSeek(float valueSeconds);
 
   void openPlayerMenu();
 
@@ -88,6 +89,7 @@ private:
   std::int64_t m_pendingSeekUs = -1;
   std::string m_pendingSeekBusName;
   std::chrono::steady_clock::time_point m_pendingSeekUntil{};
+  std::chrono::steady_clock::time_point m_progressSettleUntil{};
   bool m_syncingPlayerSelect = false;
   bool m_playerMenuOpen = false;
   std::vector<std::string> m_playerBusNames;
@@ -96,6 +98,7 @@ private:
   std::string m_positionTrackId;
   std::string m_positionTrackSignature;
   std::int64_t m_positionUs = 0;
+  std::int64_t m_lastTrackLengthUs = 0;
   std::chrono::steady_clock::time_point m_positionSampleAt{};
   std::optional<MprisPlayerInfo> m_lastActiveSnapshot;
   std::chrono::steady_clock::time_point m_lastActiveSeenAt{};

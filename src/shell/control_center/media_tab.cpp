@@ -54,6 +54,10 @@ namespace {
   constexpr std::int64_t kTransientPositionRegressionFloorUs = 5'000'000;
   constexpr std::int64_t kTransientPositionRegressionCeilingUs = 1'500'000;
   constexpr std::int64_t kTransientPositionRegressionDeltaUs = 5'000'000;
+  constexpr std::int64_t kSeekArrivedToleranceUs = 1'500'000;
+  constexpr std::int64_t kSeekNearZeroUs = 2'000'000;
+  constexpr auto kProgressSettleHold = std::chrono::milliseconds(2500);
+  constexpr auto kPendingSeekTimeout = std::chrono::milliseconds(5000);
 
   std::string playPauseGlyph(const std::string& playbackStatus) {
     return playbackStatus == "Playing" ? "media-pause" : "media-play";
@@ -268,24 +272,17 @@ std::unique_ptr<Flex> MediaTab::create() {
     const auto now = std::chrono::steady_clock::now();
     m_positionUs = targetUs;
     m_positionSampleAt = now;
-    const std::string seekBusName =
+    m_pendingSeekBusName =
         active.has_value() ? active->busName : (!m_positionBusName.empty() ? m_positionBusName : std::string{});
-    m_pendingSeekBusName = seekBusName;
     m_pendingSeekUs = targetUs;
-    m_pendingSeekUntil = now + std::chrono::milliseconds(3000);
-    const std::weak_ptr<void> aliveGuard = m_aliveGuard;
-
-    DeferredCall::callLater([this, aliveGuard, seekBusName, targetUs]() {
-      if (aliveGuard.expired() || m_mpris == nullptr) {
-        return;
-      }
-      if (!seekBusName.empty()) {
-        (void)m_mpris->setPosition(seekBusName, targetUs);
-      } else {
-        (void)m_mpris->setPositionActive(targetUs);
-      }
-      PanelManager::instance().refresh();
-    });
+    m_pendingSeekUntil = now + kPendingSeekTimeout;
+    m_progressSettleUntil = now + kProgressSettleHold;
+  });
+  progress->setOnDragEnd([this]() {
+    if (m_syncingProgress || m_mpris == nullptr || m_progressSlider == nullptr) {
+      return;
+    }
+    commitPendingSeek(m_progressSlider->value());
   });
   m_progressSlider = progress.get();
   mediaStack->addChild(std::move(progress));
@@ -572,9 +569,12 @@ void MediaTab::doUpdate(Renderer& renderer) {
   }
 
   const auto active = m_mpris != nullptr ? m_mpris->activePlayer() : std::nullopt;
-  const bool hasPendingSeek = m_pendingSeekUs >= 0 && std::chrono::steady_clock::now() < m_pendingSeekUntil;
+  const auto now = std::chrono::steady_clock::now();
+  const bool hasPendingSeek = m_pendingSeekUs >= 0 && now < m_pendingSeekUntil;
+  const bool withinProgressSettle =
+      m_progressSettleUntil != std::chrono::steady_clock::time_point{} && now < m_progressSettleUntil;
   const bool playing = active.has_value() && active->playbackStatus == "Playing";
-  if (playing || hasPendingSeek) {
+  if (playing || hasPendingSeek || withinProgressSettle) {
     if (!m_progressTimer.active()) {
       m_progressTimer.startRepeating(std::chrono::milliseconds(1000), [this]() {
         if (!m_active) {
@@ -626,6 +626,7 @@ void MediaTab::setActive(bool active) {
     m_progressTimer.stop();
     m_positionSampleAt = {};
     m_positionTrackSignature.clear();
+    m_progressSettleUntil = {};
     m_nextRealtimeUpdateAt = {};
     m_lastRealtimeMprisPollAt = {};
   }
@@ -675,6 +676,7 @@ void MediaTab::onClose() {
   m_lastActiveSnapshot.reset();
   m_pendingSeekBusName.clear();
   m_pendingSeekUs = -1;
+  m_progressSettleUntil = {};
   m_positionTrackSignature.clear();
   m_nextRealtimeUpdateAt = {};
   m_lastRealtimeMprisPollAt = {};
@@ -684,6 +686,37 @@ void MediaTab::clearArt(Renderer& renderer) {
   if (m_artwork != nullptr) {
     m_artwork->clear(renderer);
   }
+}
+
+void MediaTab::commitPendingSeek(float valueSeconds) {
+  if (m_mpris == nullptr) {
+    return;
+  }
+
+  const std::int64_t targetUs = static_cast<std::int64_t>(std::llround(valueSeconds * 1000000.0f));
+  const auto now = std::chrono::steady_clock::now();
+  m_positionUs = targetUs;
+  m_positionSampleAt = now;
+  const auto active = m_mpris->activePlayer();
+  const std::string seekBusName =
+      active.has_value() ? active->busName : (!m_positionBusName.empty() ? m_positionBusName : std::string{});
+  m_pendingSeekBusName = seekBusName;
+  m_pendingSeekUs = targetUs;
+  m_pendingSeekUntil = now + kPendingSeekTimeout;
+  m_progressSettleUntil = now + kProgressSettleHold;
+
+  const std::weak_ptr<void> aliveGuard = m_aliveGuard;
+  DeferredCall::callLater([this, aliveGuard, seekBusName, targetUs]() {
+    if (aliveGuard.expired() || m_mpris == nullptr) {
+      return;
+    }
+    if (!seekBusName.empty()) {
+      (void)m_mpris->setPosition(seekBusName, targetUs);
+    } else {
+      (void)m_mpris->setPositionActive(targetUs);
+    }
+    PanelManager::instance().refresh();
+  });
 }
 
 void MediaTab::refresh(Renderer& renderer) {
@@ -754,7 +787,13 @@ void MediaTab::refresh(Renderer& renderer) {
     }
 
     const bool pendingMatchesPlayer = m_pendingSeekBusName.empty() || m_pendingSeekBusName == player.busName;
-    const bool seekPending = pendingMatchesPlayer && now < m_pendingSeekUntil && m_pendingSeekUs >= 0;
+    const bool seekArrived = pendingMatchesPlayer && m_pendingSeekUs >= 0 &&
+                             std::llabs(livePositionUs - m_pendingSeekUs) <= kSeekArrivedToleranceUs &&
+                             (m_pendingSeekUs <= kSeekNearZeroUs || livePositionUs > kSeekNearZeroUs ||
+                              livePositionUs >= m_pendingSeekUs - kSeekArrivedToleranceUs);
+    const bool seekPending = pendingMatchesPlayer && m_pendingSeekUs >= 0 && !seekArrived && now < m_pendingSeekUntil;
+    const bool withinProgressSettle =
+        m_progressSettleUntil != std::chrono::steady_clock::time_point{} && now < m_progressSettleUntil;
     const bool sameDisplayedTrack = m_positionBusName == player.busName && m_positionTrackSignature == trackSignature;
     const bool withinTransientRegressionWindow = m_positionSampleAt != std::chrono::steady_clock::time_point{} &&
                                                  now - m_positionSampleAt <= kTransientPositionRegressionWindow;
@@ -767,23 +806,26 @@ void MediaTab::refresh(Renderer& renderer) {
       livePositionUs = m_positionUs;
     }
 
+    std::int64_t displayPositionUs = livePositionUs;
+    if (seekPending) {
+      displayPositionUs = m_pendingSeekUs;
+    } else if (withinProgressSettle && livePositionUs + kTransientPositionRegressionDeltaUs < m_positionUs) {
+      displayPositionUs = m_positionUs;
+    } else if (preserveDisplayedPosition) {
+      displayPositionUs = m_positionUs;
+    }
+
+    const bool samePlayerAsDisplayed = m_positionBusName == player.busName || m_pendingSeekBusName == player.busName;
+
     m_positionBusName = player.busName;
     m_positionTrackId = player.trackId;
     m_positionTrackSignature = trackSignature;
-    if (!preserveDisplayedPosition) {
-      m_positionUs = livePositionUs;
-      m_positionSampleAt = now;
-    }
+    m_positionUs = displayPositionUs;
+    m_positionSampleAt = now;
 
-    const bool seekReached = seekPending && std::llabs(livePositionUs - m_pendingSeekUs) <= 1500000;
-    const std::int64_t displayPositionUs = seekPending && !seekReached ? m_pendingSeekUs : livePositionUs;
-    if (!seekPending || seekReached) {
+    if (seekArrived) {
       m_pendingSeekBusName.clear();
       m_pendingSeekUs = -1;
-    }
-    if (!preserveDisplayedPosition || seekPending) {
-      m_positionUs = displayPositionUs;
-      m_positionSampleAt = now;
     }
 
     m_trackTitle->setText(player.title.empty() ? player.identity : player.title);
@@ -835,11 +877,25 @@ void MediaTab::refresh(Renderer& renderer) {
       m_lastArtPath.clear();
     }
 
+    std::int64_t trackLengthUs = player.lengthUs;
+    if (trackLengthUs > 0) {
+      m_lastTrackLengthUs = trackLengthUs;
+    } else if (m_lastTrackLengthUs > 0 && samePlayerAsDisplayed) {
+      trackLengthUs = m_lastTrackLengthUs;
+    }
+    const bool progressInteracting = m_progressSlider->dragging() || seekPending || withinProgressSettle;
+    const bool progressEnabled = player.canSeek && (trackLengthUs > 0 || progressInteracting);
+
     m_syncingProgress = true;
-    m_progressSlider->setEnabled(player.canSeek && player.lengthUs > 0);
-    m_progressSlider->setRange(0.0f, std::max(1.0f, static_cast<float>(player.lengthUs) / 1000000.0f));
+    m_progressSlider->setEnabled(progressEnabled);
+    if (trackLengthUs > 0) {
+      m_progressSlider->setRange(0.0f, static_cast<float>(trackLengthUs) / 1000000.0f);
+    }
     if (!m_progressSlider->dragging()) {
-      m_progressSlider->setValue(static_cast<float>(displayPositionUs) / 1000000.0f);
+      const float sliderMax = m_progressSlider->maxValue();
+      const float nextValue =
+          sliderMax > 0.0f ? std::clamp(static_cast<float>(displayPositionUs) / 1000000.0f, 0.0f, sliderMax) : 0.0f;
+      m_progressSlider->setValue(nextValue);
     }
     m_syncingProgress = false;
 
@@ -864,11 +920,13 @@ void MediaTab::refresh(Renderer& renderer) {
 
   m_pendingSeekBusName.clear();
   m_pendingSeekUs = -1;
+  m_progressSettleUntil = {};
   m_lastActiveSnapshot.reset();
   m_positionBusName.clear();
   m_positionTrackId.clear();
   m_positionTrackSignature.clear();
   m_positionUs = 0;
+  m_lastTrackLengthUs = 0;
   m_positionSampleAt = {};
   m_trackTitle->setText(i18n::tr("control-center.media.nothing-playing"));
   m_trackArtist->setText(i18n::tr("control-center.media.start-playback"));

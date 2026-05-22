@@ -105,12 +105,26 @@ void Slider::setRange(float minValue, float maxValue) {
   }
   m_min = minValue;
   m_max = maxValue;
-  setValue(m_value);
+  const float next = snapped(m_value);
+  const bool valueChanged = std::abs(next - m_value) >= 0.0001f;
+  m_value = next;
+  updateGeometry();
+  markPaintDirty();
+  if (valueChanged && m_onValueChanged) {
+    m_onValueChanged(m_value);
+  }
 }
 
 void Slider::setStep(float step) {
   m_step = std::max(step, 0.0f);
-  setValue(m_value);
+  const float next = snapped(m_value);
+  const bool valueChanged = std::abs(next - m_value) >= 0.0001f;
+  m_value = next;
+  updateGeometry();
+  markPaintDirty();
+  if (valueChanged && m_onValueChanged) {
+    m_onValueChanged(m_value);
+  }
 }
 
 void Slider::setValue(float value) {

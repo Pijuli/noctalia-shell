@@ -1100,10 +1100,13 @@ void ConfigService::parseTableInto(const toml::table& tbl, Config& config, bool 
       if (auto v = finiteDouble((*barTbl)["scale"]))
         bar.scale = std::clamp(static_cast<float>(*v), 0.5f, 4.0f);
       if (auto v = (*barTbl)["font_weight"].value<std::string>()) {
-        if (*v == "regular") {
+        if (*v == "bold") {
+          bar.fontWeight = "bold";
+        } else if (*v == "regular") {
           bar.fontWeight = "regular";
-        } else if (*v != "bold") {
-          kLog.warn("bar.{}.font_weight: unknown value '{}', using bold", bar.name, *v);
+        } else {
+          kLog.warn("bar.{}.font_weight: unknown value '{}', using regular", bar.name, *v);
+          bar.fontWeight = "regular";
         }
       }
       if (auto* n = (*barTbl)["start"].as_array())

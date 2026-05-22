@@ -94,7 +94,7 @@ protected:
   virtual void doUpdate(Renderer& renderer) { (void)renderer; }
 
   float m_contentScale = 1.0f;
-  bool m_labelBold = true;
+  bool m_labelBold = false;
   std::string m_configName;
   bool m_anchor = false;
   AnimationManager* m_animations = nullptr;
