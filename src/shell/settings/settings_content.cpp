@@ -981,6 +981,43 @@ namespace settings {
       return reset;
     };
 
+    const auto makeStatusBadge = [&](std::string_view label, const ColorSpec& fill, const ColorSpec& color,
+                                     bool matchResetHeight) {
+      auto badge = std::make_unique<Flex>();
+      badge->setAlign(FlexAlign::Center);
+      if (matchResetHeight) {
+        badge->setMinHeight(Style::controlHeightSm * scale);
+        badge->setPadding(Style::spaceXs * scale, Style::spaceSm * scale);
+      } else {
+        badge->setPadding(0, Style::spaceXs * scale);
+      }
+      badge->setRadius(Style::scaledRadiusSm(scale));
+      badge->setFill(fill);
+      badge->addChild(makeLabel(label, Style::fontSizeCaption * scale, color, true));
+      return badge;
+    };
+
+    const auto makeOverrideBadge = [&]() {
+      return makeStatusBadge(i18n::tr("settings.badges.override"), colorSpecFromRole(ColorRole::Primary, 0.15f),
+                             colorSpecFromRole(ColorRole::Primary), true);
+    };
+
+    const auto makeAdvancedBadge = [&]() {
+      return makeStatusBadge(i18n::tr("settings.badges.advanced"),
+                             colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.12f),
+                             colorSpecFromRole(ColorRole::OnSurfaceVariant), false);
+    };
+
+    const auto makeOverrideResetActions = [&](const std::vector<std::string>& path) {
+      auto group = std::make_unique<Flex>();
+      group->setDirection(FlexDirection::Horizontal);
+      group->setAlign(FlexAlign::Center);
+      group->setGap(Style::spaceSm * scale);
+      group->addChild(makeOverrideBadge());
+      group->addChild(makeResetButton(path));
+      return group;
+    };
+
     const auto makeRow = [&](Flex& section, const SettingEntry& entry, std::unique_ptr<Node> control) {
       const bool overridden = (ctx.configService != nullptr && ctx.configService->hasEffectiveOverride(entry.path));
       const bool redundantGuiOverride =
@@ -1008,40 +1045,23 @@ namespace settings {
       titleRow->setAlign(FlexAlign::Center);
       titleRow->setGap(Style::spaceSm * scale);
       titleRow->setFillWidth(true);
-      {
-        auto tl = makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
-        tl->setFlexGrow(1.0f);
-        titleRow->addChild(std::move(tl));
-      }
-
-      const auto makeBadge = [&](std::string_view label, const ColorSpec& fill, const ColorSpec& color) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(0, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(fill);
-        badge->addChild(makeLabel(label, Style::fontSizeCaption * scale, color, true));
-        return badge;
-      };
-
-      if (monitorExplicit) {
-        titleRow->addChild(makeBadge(i18n::tr("settings.badges.monitor"),
-                                     colorSpecFromRole(ColorRole::Secondary, 0.15f),
-                                     colorSpecFromRole(ColorRole::Secondary)));
-      } else if (monitorInherited) {
-        titleRow->addChild(makeBadge(i18n::tr("settings.badges.inherited"),
-                                     colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.12f),
-                                     colorSpecFromRole(ColorRole::OnSurfaceVariant)));
-      }
-      if (overridden) {
-        titleRow->addChild(makeBadge(i18n::tr("settings.badges.override"), colorSpecFromRole(ColorRole::Primary, 0.15f),
-                                     colorSpecFromRole(ColorRole::Primary)));
-      }
+      titleRow->addChild(
+          makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true));
       if (entry.advanced) {
-        titleRow->addChild(makeBadge(i18n::tr("settings.badges.advanced"),
-                                     colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.12f),
-                                     colorSpecFromRole(ColorRole::OnSurfaceVariant)));
+        titleRow->addChild(makeAdvancedBadge());
       }
+      if (monitorExplicit) {
+        titleRow->addChild(makeStatusBadge(i18n::tr("settings.badges.monitor"),
+                                           colorSpecFromRole(ColorRole::Secondary, 0.15f),
+                                           colorSpecFromRole(ColorRole::Secondary), false));
+      } else if (monitorInherited) {
+        titleRow->addChild(makeStatusBadge(i18n::tr("settings.badges.inherited"),
+                                           colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.12f),
+                                           colorSpecFromRole(ColorRole::OnSurfaceVariant), false));
+      }
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       copy->addChild(std::move(titleRow));
 
       if (!entry.subtitle.empty()) {
@@ -1057,6 +1077,7 @@ namespace settings {
       actions->setAlign(FlexAlign::Center);
       actions->setGap(Style::spaceSm * scale);
       if (overridden) {
+        actions->addChild(makeOverrideBadge());
         actions->addChild(makeResetButton(entry.path));
       }
       actions->addChild(std::move(control));
@@ -1496,21 +1517,13 @@ namespace settings {
       titleRow->setAlign(FlexAlign::Center);
       titleRow->setGap(Style::spaceSm * scale);
       titleRow->setFillWidth(true);
-      {
-        auto tl = makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
-        tl->setFlexGrow(1.0f);
-        titleRow->addChild(std::move(tl));
-      }
+      titleRow->addChild(
+          makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true));
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       if (overridden) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(1.0f * scale, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(colorSpecFromRole(ColorRole::Primary, 0.15f));
-        badge->addChild(makeLabel(i18n::tr("settings.badges.override"), Style::fontSizeCaption * scale,
-                                  colorSpecFromRole(ColorRole::Primary), true));
-        titleRow->addChild(std::move(badge));
-        titleRow->addChild(makeResetButton(entry.path));
+        titleRow->addChild(makeOverrideResetActions(entry.path));
       }
       block->addChild(std::move(titleRow));
 
@@ -1592,23 +1605,13 @@ namespace settings {
       titleRow->setAlign(FlexAlign::Center);
       titleRow->setGap(Style::spaceSm * scale);
       titleRow->setFillWidth(true);
-      {
-        auto tl = makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
-        tl->setFlexGrow(1.0f);
-        titleRow->addChild(std::move(tl));
-      }
+      titleRow->addChild(
+          makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true));
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       if (overridden) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(1.0f * scale, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(colorSpecFromRole(ColorRole::Primary, 0.15f));
-        badge->addChild(makeLabel(i18n::tr("settings.badges.override"), Style::fontSizeCaption * scale,
-                                  colorSpecFromRole(ColorRole::Primary), true));
-        titleRow->addChild(std::move(badge));
-      }
-      if (overridden) {
-        titleRow->addChild(makeResetButton(entry.path));
+        titleRow->addChild(makeOverrideResetActions(entry.path));
       }
       block->addChild(std::move(titleRow));
 
@@ -1685,20 +1688,12 @@ namespace settings {
       auto titleLabel =
           makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
       titleLabel->setMaxLines(2);
-      titleLabel->setFlexGrow(1.0f);
       titleRow->addChild(std::move(titleLabel));
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       if (overridden) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(1.0f * scale, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(colorSpecFromRole(ColorRole::Primary, 0.15f));
-        badge->addChild(makeLabel(i18n::tr("settings.badges.override"), Style::fontSizeCaption * scale,
-                                  colorSpecFromRole(ColorRole::Primary), true));
-        titleRow->addChild(std::move(badge));
-      }
-      if (overridden) {
-        titleRow->addChild(makeResetButton(entry.path));
+        titleRow->addChild(makeOverrideResetActions(entry.path));
       }
       block->addChild(std::move(titleRow));
 
@@ -1818,23 +1813,13 @@ namespace settings {
       titleRow->setAlign(FlexAlign::Center);
       titleRow->setGap(Style::spaceSm * scale);
       titleRow->setFillWidth(true);
-      {
-        auto tl = makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
-        tl->setFlexGrow(1.0f);
-        titleRow->addChild(std::move(tl));
-      }
+      titleRow->addChild(
+          makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true));
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       if (overridden) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(1.0f * scale, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(colorSpecFromRole(ColorRole::Primary, 0.15f));
-        badge->addChild(makeLabel(i18n::tr("settings.badges.override"), Style::fontSizeCaption * scale,
-                                  colorSpecFromRole(ColorRole::Primary), true));
-        titleRow->addChild(std::move(badge));
-      }
-      if (overridden) {
-        titleRow->addChild(makeResetButton(entry.path));
+        titleRow->addChild(makeOverrideResetActions(entry.path));
       }
       block->addChild(std::move(titleRow));
 
@@ -1906,23 +1891,13 @@ namespace settings {
       titleRow->setAlign(FlexAlign::Center);
       titleRow->setGap(Style::spaceSm * scale);
       titleRow->setFillWidth(true);
-      {
-        auto tl = makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
-        tl->setFlexGrow(1.0f);
-        titleRow->addChild(std::move(tl));
-      }
+      titleRow->addChild(
+          makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true));
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       if (overridden) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(1.0f * scale, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(colorSpecFromRole(ColorRole::Primary, 0.15f));
-        badge->addChild(makeLabel(i18n::tr("settings.badges.override"), Style::fontSizeCaption * scale,
-                                  colorSpecFromRole(ColorRole::Primary), true));
-        titleRow->addChild(std::move(badge));
-      }
-      if (overridden) {
-        titleRow->addChild(makeResetButton(entry.path));
+        titleRow->addChild(makeOverrideResetActions(entry.path));
       }
       block->addChild(std::move(titleRow));
 
@@ -2067,21 +2042,13 @@ namespace settings {
       titleRow->setAlign(FlexAlign::Center);
       titleRow->setGap(Style::spaceSm * scale);
       titleRow->setFillWidth(true);
-      {
-        auto tl = makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true);
-        tl->setFlexGrow(1.0f);
-        titleRow->addChild(std::move(tl));
-      }
+      titleRow->addChild(
+          makeLabel(entry.title, Style::fontSizeBody * scale, colorSpecFromRole(ColorRole::OnSurface), true));
+      auto titleSpacer = std::make_unique<Flex>();
+      titleSpacer->setFlexGrow(1.0f);
+      titleRow->addChild(std::move(titleSpacer));
       if (overridden) {
-        auto badge = std::make_unique<Flex>();
-        badge->setAlign(FlexAlign::Center);
-        badge->setPadding(1.0f * scale, Style::spaceXs * scale);
-        badge->setRadius(Style::scaledRadiusSm(scale));
-        badge->setFill(colorSpecFromRole(ColorRole::Primary, 0.15f));
-        badge->addChild(makeLabel(i18n::tr("settings.badges.override"), Style::fontSizeCaption * scale,
-                                  colorSpecFromRole(ColorRole::Primary), true));
-        titleRow->addChild(std::move(badge));
-        titleRow->addChild(makeResetButton(entry.path));
+        titleRow->addChild(makeOverrideResetActions(entry.path));
       }
       block->addChild(std::move(titleRow));
 
