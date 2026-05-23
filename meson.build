@@ -55,8 +55,24 @@ polkit_gobject_dep  = dependency('polkit-gobject-1')
 pipewire_dep        = dependency('libpipewire-0.3', include_type: 'system')
 curl_dep            = dependency('libcurl')
 pam_dep             = cc.find_library('pam')
-jemalloc_dep        = dependency('jemalloc', required: false)
 dl_dep              = cpp.find_library('dl', required: false)
+
+jemalloc_option = get_option('jemalloc')
+is_glibc = cpp.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
+jemalloc_deps = []
+jemalloc_cpp_args = []
+
+if jemalloc_option.enabled() and not is_glibc
+  error('jemalloc support requires glibc')
+endif
+
+if is_glibc
+  jemalloc_dep = dependency('jemalloc', required: jemalloc_option)
+  if jemalloc_dep.found()
+    jemalloc_deps += [jemalloc_dep]
+    jemalloc_cpp_args += ['-DNOCTALIA_USE_JEMALLOC=1']
+  endif
+endif
 
 egl_dep = dependency('egl', required: false)
 gles2_dep = dependency('glesv2', required: false)
@@ -740,7 +756,7 @@ executable('noctalia',
     stb_dep,
     libwebp_dep,
     luau_dep,
-  ] + (jemalloc_dep.found() ? [jemalloc_dep] : []) + (dl_dep.found() ? [dl_dep] : []),
+  ] + jemalloc_deps + (dl_dep.found() ? [dl_dep] : []),
   include_directories: _noctalia_inc,
   cpp_args: [
     '-Wall', '-Wextra', '-Wpedantic', '-Wconversion', '-Wshadow',
@@ -748,7 +764,7 @@ executable('noctalia',
     '-DNOCTALIA_INSTALL_PREFIX="' + get_option('prefix') + '"',
     '-DNOCTALIA_INSTALL_DATADIR="' + get_option('datadir') + '"',
     '-DNOCTALIA_VERSION="' + meson.project_version() + '"',
-  ],
+  ] + jemalloc_cpp_args,
   install: true,
 )
 

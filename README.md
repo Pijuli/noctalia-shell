@@ -83,7 +83,8 @@ modules. Some distros ship these in the runtime `polkit` package, while split-pa
 `polkit-devel`, `polkit-dev`, or `libpolkit-agent-1-dev` / `libpolkit-gobject-1-dev`.
 
 **Optional:** installing `jemalloc` (Fedora: `jemalloc-devel`, Arch: `jemalloc`, Debian/Ubuntu: `libjemalloc-dev`, Void: `jemalloc`)
-reduces memory fragmentation in long-running sessions. When detected at build time it is used automatically.
+reduces memory fragmentation in long-running sessions. On glibc systems it is used automatically when detected. Use
+Meson's `-Djemalloc=enabled` or `-Djemalloc=disabled` option to require or disable it explicitly.
 
 Sanitizer runtime packages are only needed for ASan/UBSan builds configured with `just configure asan`.
 
