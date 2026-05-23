@@ -8,6 +8,7 @@
 #include "render/core/renderer.h"
 #include "render/core/thumbnail_service.h"
 #include "render/scene/input_area.h"
+#include "ui/builders.h"
 #include "ui/controls/button.h"
 #include "ui/controls/flex.h"
 #include "ui/controls/input.h"
@@ -143,12 +144,12 @@ void FileDialogView::create() {
     button->setRadius(Style::scaledRadiusMd(scale));
   };
 
-  auto root = std::make_unique<Flex>();
-  root->setDirection(FlexDirection::Vertical);
-  root->setAlign(FlexAlign::Stretch);
-  root->setGap(Style::spaceSm * scale);
-  root->setPadding(Style::spaceMd * scale);
-  m_rootLayout = root.get();
+  auto root = ui::column({
+      .out = &m_rootLayout,
+      .align = FlexAlign::Stretch,
+      .gap = Style::spaceSm * scale,
+      .padding = Style::spaceMd * scale,
+  });
 
   auto listFocus = std::make_unique<InputArea>();
   listFocus->setFocusable(true);
@@ -156,83 +157,81 @@ void FileDialogView::create() {
   listFocus->setParticipatesInLayout(false);
   m_listFocusArea = static_cast<InputArea*>(root->addChild(std::move(listFocus)));
 
-  auto header = std::make_unique<Flex>();
-  header->setDirection(FlexDirection::Horizontal);
-  header->setAlign(FlexAlign::Center);
-  header->setGap(Style::spaceSm * scale);
+  root->addChild(ui::row(
+      {
+          .align = FlexAlign::Center,
+          .gap = Style::spaceSm * scale,
+      },
+      ui::label({
+          .out = &m_titleLabel,
+          .fontSize = Style::fontSizeTitle * scale,
+          .color = colorSpecFromRole(ColorRole::Primary),
+          .fontWeight = FontWeight::Bold,
+      }),
+      ui::spacer(),
+      ui::button({
+          .glyph = "close",
+          .onClick = [this]() { DeferredCall::callLater([this]() { cancelDialog(); }); },
+          .configure = [configureIconButton](Button& button) { configureIconButton(&button); },
+      })));
 
-  auto title = std::make_unique<Label>();
-  title->setFontSize(Style::fontSizeTitle * scale);
-  title->setFontWeight(FontWeight::Bold);
-  title->setColor(colorSpecFromRole(ColorRole::Primary));
-  m_titleLabel = static_cast<Label*>(header->addChild(std::move(title)));
+  root->addChild(ui::row({
+      .out = &m_breadcrumbRow,
+      .align = FlexAlign::Center,
+      .gap = Style::spaceXs * scale,
+      .minHeight = Style::controlHeightSm * scale,
+      .fillWidth = true,
+      .clipChildren = true,
+  }));
 
-  header->addChild(std::make_unique<Spacer>());
-
-  auto closeButton = std::make_unique<Button>();
-  closeButton->setGlyph("close");
-  configureIconButton(closeButton.get());
-  closeButton->setOnClick([this]() { DeferredCall::callLater([this]() { cancelDialog(); }); });
-  header->addChild(std::move(closeButton));
-  root->addChild(std::move(header));
-
-  auto breadcrumb = std::make_unique<Flex>();
-  breadcrumb->setDirection(FlexDirection::Horizontal);
-  breadcrumb->setAlign(FlexAlign::Center);
-  breadcrumb->setGap(Style::spaceXs * scale);
-  breadcrumb->setClipChildren(true);
-  breadcrumb->setFillWidth(true);
-  breadcrumb->setMinHeight(Style::controlHeightSm * scale);
-  m_breadcrumbRow = breadcrumb.get();
-  root->addChild(std::move(breadcrumb));
-
-  auto toolbar = std::make_unique<Flex>();
-  toolbar->setDirection(FlexDirection::Horizontal);
-  toolbar->setAlign(FlexAlign::Center);
-  toolbar->setGap(Style::spaceSm * scale);
-
-  auto searchInput = std::make_unique<Input>();
-  searchInput->setPlaceholder(i18n::tr("ui.dialogs.file.filter-placeholder"));
-  searchInput->setFontSize(Style::fontSizeBody * scale);
-  searchInput->setControlHeight(Style::controlHeight * scale);
-  searchInput->setHorizontalPadding(Style::spaceMd * scale);
-  searchInput->setSize(320.0f * scale, 0.0f);
-  searchInput->setFlexGrow(1.0f);
-  searchInput->setOnChange([this](const std::string& text) {
-    m_filterQuery = text;
-    applyFilter(true);
-  });
-  searchInput->setOnSubmit([this](const std::string&) { activateSelection(); });
-  m_searchInput = static_cast<Input*>(toolbar->addChild(std::move(searchInput)));
-
-  auto backButton = std::make_unique<Button>();
-  backButton->setGlyph("arrow-big-up");
-  configureIconButton(backButton.get());
-  backButton->setOnClick([this]() { DeferredCall::callLater([this]() { navigateUp(); }); });
-  m_backButton = static_cast<Button*>(toolbar->addChild(std::move(backButton)));
-
-  toolbar->addChild(std::make_unique<Spacer>());
-
-  auto sortLabel = std::make_unique<Label>();
-  sortLabel->setFontSize(Style::fontSizeCaption * scale);
-  m_sortLabel = static_cast<Label*>(toolbar->addChild(std::move(sortLabel)));
-
-  auto hiddenToggle = std::make_unique<Button>();
-  hiddenToggle->setGlyph("eye");
-  hiddenToggle->setVariant(ButtonVariant::Tab);
-  configureIconButton(hiddenToggle.get());
-  hiddenToggle->setOnClick([this]() { DeferredCall::callLater([this]() { setShowHiddenFiles(!m_showHiddenFiles); }); });
-  m_hiddenToggle = static_cast<Button*>(toolbar->addChild(std::move(hiddenToggle)));
-
-  auto viewToggle = std::make_unique<Button>();
-  viewToggle->setVariant(ButtonVariant::Default);
-  configureIconButton(viewToggle.get());
-  viewToggle->setOnClick([this]() {
-    DeferredCall::callLater([this]() { setViewMode(m_viewMode == ViewMode::List ? ViewMode::Grid : ViewMode::List); });
-  });
-  m_viewToggle = static_cast<Button*>(toolbar->addChild(std::move(viewToggle)));
-
-  root->addChild(std::move(toolbar));
+  root->addChild(ui::row(
+      {
+          .align = FlexAlign::Center,
+          .gap = Style::spaceSm * scale,
+      },
+      ui::input({
+          .out = &m_searchInput,
+          .placeholder = i18n::tr("ui.dialogs.file.filter-placeholder"),
+          .fontSize = Style::fontSizeBody * scale,
+          .controlHeight = Style::controlHeight * scale,
+          .horizontalPadding = Style::spaceMd * scale,
+          .width = 320.0f * scale,
+          .flexGrow = 1.0f,
+          .onChange =
+              [this](const std::string& text) {
+                m_filterQuery = text;
+                applyFilter(true);
+              },
+          .onSubmit = [this](const std::string&) { activateSelection(); },
+      }),
+      ui::button({
+          .out = &m_backButton,
+          .glyph = "arrow-big-up",
+          .onClick = [this]() { DeferredCall::callLater([this]() { navigateUp(); }); },
+          .configure = [configureIconButton](Button& button) { configureIconButton(&button); },
+      }),
+      ui::spacer(),
+      ui::label({
+          .out = &m_sortLabel,
+          .fontSize = Style::fontSizeCaption * scale,
+      }),
+      ui::button({
+          .out = &m_hiddenToggle,
+          .glyph = "eye",
+          .variant = ButtonVariant::Tab,
+          .onClick = [this]() { DeferredCall::callLater([this]() { setShowHiddenFiles(!m_showHiddenFiles); }); },
+          .configure = [configureIconButton](Button& button) { configureIconButton(&button); },
+      }),
+      ui::button({
+          .out = &m_viewToggle,
+          .variant = ButtonVariant::Default,
+          .onClick =
+              [this]() {
+                DeferredCall::callLater(
+                    [this]() { setViewMode(m_viewMode == ViewMode::List ? ViewMode::Grid : ViewMode::List); });
+              },
+          .configure = [configureIconButton](Button& button) { configureIconButton(&button); },
+      })));
 
   auto listContainer = std::make_unique<Flex>();
   listContainer->setDirection(FlexDirection::Vertical);
@@ -342,37 +341,35 @@ void FileDialogView::create() {
 
   root->addChild(std::move(gridContainer));
 
-  auto footer = std::make_unique<Flex>();
-  footer->setDirection(FlexDirection::Horizontal);
-  footer->setAlign(FlexAlign::Center);
-  footer->setGap(Style::spaceSm * scale);
-
-  auto filenameInput = std::make_unique<Input>();
-  filenameInput->setPlaceholder(i18n::tr("ui.dialogs.file.filename-placeholder"));
-  filenameInput->setFontSize(Style::fontSizeBody * scale);
-  filenameInput->setControlHeight(Style::controlHeight * scale);
-  filenameInput->setHorizontalPadding(Style::spaceMd * scale);
-  filenameInput->setFlexGrow(1.0f);
-  filenameInput->setOnChange([this](const std::string&) { updateControls(); });
-  filenameInput->setOnSubmit([this](const std::string&) { submitDialog(); });
-  m_filenameInput = static_cast<Input*>(footer->addChild(std::move(filenameInput)));
-
-  footer->addChild(std::make_unique<Spacer>());
-
-  auto cancelButton = std::make_unique<Button>();
-  cancelButton->setText(i18n::tr("common.actions.cancel"));
-  cancelButton->setVariant(ButtonVariant::Secondary);
-  configureDialogActionButton(*cancelButton, scale);
-  cancelButton->setOnClick([this]() { DeferredCall::callLater([this]() { cancelDialog(); }); });
-  m_cancelButton = static_cast<Button*>(footer->addChild(std::move(cancelButton)));
-
-  auto okButton = std::make_unique<Button>();
-  okButton->setVariant(ButtonVariant::Primary);
-  configureDialogActionButton(*okButton, scale);
-  okButton->setOnClick([this]() { DeferredCall::callLater([this]() { submitDialog(); }); });
-  m_okButton = static_cast<Button*>(footer->addChild(std::move(okButton)));
-
-  root->addChild(std::move(footer));
+  root->addChild(ui::row(
+      {
+          .align = FlexAlign::Center,
+          .gap = Style::spaceSm * scale,
+      },
+      ui::input({
+          .out = &m_filenameInput,
+          .placeholder = i18n::tr("ui.dialogs.file.filename-placeholder"),
+          .fontSize = Style::fontSizeBody * scale,
+          .controlHeight = Style::controlHeight * scale,
+          .horizontalPadding = Style::spaceMd * scale,
+          .flexGrow = 1.0f,
+          .onChange = [this](const std::string&) { updateControls(); },
+          .onSubmit = [this](const std::string&) { submitDialog(); },
+      }),
+      ui::spacer(),
+      ui::button({
+          .out = &m_cancelButton,
+          .text = i18n::tr("common.actions.cancel"),
+          .variant = ButtonVariant::Secondary,
+          .onClick = [this]() { DeferredCall::callLater([this]() { cancelDialog(); }); },
+          .configure = [scale](Button& button) { configureDialogActionButton(button, scale); },
+      }),
+      ui::button({
+          .out = &m_okButton,
+          .variant = ButtonVariant::Primary,
+          .onClick = [this]() { DeferredCall::callLater([this]() { submitDialog(); }); },
+          .configure = [scale](Button& button) { configureDialogActionButton(button, scale); },
+      })));
   setRoot(std::move(root));
 
   if (m_animations != nullptr && this->root() != nullptr) {
