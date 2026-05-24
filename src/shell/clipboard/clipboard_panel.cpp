@@ -858,7 +858,14 @@ void ClipboardPanel::schedulePreviewPayloadRefresh(bool debounced) {
 
 void ClipboardPanel::updateListState() {
   const auto& history = m_clipboard != nullptr ? m_clipboard->history() : std::deque<ClipboardEntry>{};
+  const bool historyEmpty = history.empty();
   const bool empty = history.empty() || m_filteredIndices.empty();
+
+  if (m_clearHistoryButton != nullptr) {
+    m_clearHistoryButton->setVisible(!historyEmpty);
+    m_clearHistoryButton->setParticipatesInLayout(!historyEmpty);
+    m_clearHistoryButton->setEnabled(!historyEmpty);
+  }
 
   if (m_listEmptyLabel != nullptr) {
     m_listEmptyLabel->setText(
@@ -876,7 +883,27 @@ void ClipboardPanel::updateListState() {
 }
 
 void ClipboardPanel::updatePreviewActions() {
+  bool hasSelection = false;
+  if (m_clipboard != nullptr) {
+    const std::size_t historyIndex = selectedHistoryIndex();
+    const auto& history = m_clipboard->history();
+    hasSelection = historyIndex != static_cast<std::size_t>(-1) && historyIndex < history.size();
+  }
+
+  if (m_copyButton != nullptr) {
+    m_copyButton->setVisible(hasSelection);
+    m_copyButton->setParticipatesInLayout(hasSelection);
+    m_copyButton->setEnabled(hasSelection);
+  }
+
+  if (m_deleteEntryButton != nullptr) {
+    m_deleteEntryButton->setVisible(hasSelection);
+    m_deleteEntryButton->setParticipatesInLayout(hasSelection);
+    m_deleteEntryButton->setEnabled(hasSelection);
+  }
+
   if (m_imageActionButton == nullptr) {
+    updatePinButton();
     return;
   }
 
