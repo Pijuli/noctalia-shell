@@ -12,6 +12,7 @@ on:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    if: ${{ github.repository == 'noctalia-dev/noctalia-shell' }}
     steps:
       - name: Checkout (full history + all branches)
         uses: actions/checkout@v4
