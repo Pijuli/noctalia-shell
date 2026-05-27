@@ -939,6 +939,46 @@ namespace settings {
             .visibleWhen = std::nullopt,
         };
 
+        const auto makeGlyphTextControl = [&ctx, path](std::string currentValue) -> std::unique_ptr<Node> {
+          auto textNode = ctx.makeText(currentValue, {}, path);
+          return ui::row(
+              {
+                  .align = FlexAlign::Center,
+                  .gap = Style::spaceSm * ctx.scale,
+              },
+              std::move(textNode),
+              ui::button({
+                  .glyph = "apps",
+                  .glyphSize = Style::fontSizeBody * ctx.scale,
+                  .variant = ButtonVariant::Outline,
+                  .minWidth = Style::controlHeight * ctx.scale,
+                  .minHeight = Style::controlHeight * ctx.scale,
+                  .paddingV = Style::spaceXs * ctx.scale,
+                  .paddingH = Style::spaceSm * ctx.scale,
+                  .radius = Style::scaledRadiusMd(ctx.scale),
+                  .onClick = [setOverride = ctx.setOverride, requestRebuild = ctx.requestRebuild, path,
+                              currentValue = std::move(currentValue)]() {
+                    GlyphPickerDialogOptions options;
+                    if (!currentValue.empty()) {
+                      options.initialGlyph = currentValue;
+                    }
+                    (void)GlyphPickerDialog::open(
+                        std::move(options),
+                        [setOverride, requestRebuild, path](std::optional<GlyphPickerResult> result) {
+                          if (!result.has_value()) {
+                            return;
+                          }
+                          setOverride(path, result->name);
+                          if (requestRebuild) {
+                            requestRebuild();
+                          }
+                        }
+                    );
+                  },
+              })
+          );
+        };
+
         switch (spec.valueType) {
         case WidgetSettingValueType::Bool: {
           std::optional<bool> clearWhenValue;
@@ -1009,47 +1049,7 @@ namespace settings {
         }
         case WidgetSettingValueType::String: {
           auto textNode = ctx.makeText(settingValueAsString(value), {}, path);
-          if (spec.key == "glyph") {
-            ctx.makeRow(
-                *panel, entry,
-                ui::row(
-                    {
-                        .align = FlexAlign::Center,
-                        .gap = Style::spaceSm * ctx.scale,
-                    },
-                    std::move(textNode),
-                    ui::button({
-                        .glyph = "apps",
-                        .glyphSize = Style::fontSizeBody * ctx.scale,
-                        .variant = ButtonVariant::Outline,
-                        .minWidth = Style::controlHeight * ctx.scale,
-                        .minHeight = Style::controlHeight * ctx.scale,
-                        .paddingV = Style::spaceXs * ctx.scale,
-                        .paddingH = Style::spaceSm * ctx.scale,
-                        .radius = Style::scaledRadiusMd(ctx.scale),
-                        .onClick = [setOverride = ctx.setOverride, requestRebuild = ctx.requestRebuild, path,
-                                    currentValue = settingValueAsString(value)]() {
-                          GlyphPickerDialogOptions options;
-                          if (!currentValue.empty()) {
-                            options.initialGlyph = currentValue;
-                          }
-                          (void)GlyphPickerDialog::open(
-                              std::move(options),
-                              [setOverride, requestRebuild, path](std::optional<GlyphPickerResult> result) {
-                                if (!result.has_value()) {
-                                  return;
-                                }
-                                setOverride(path, result->name);
-                                if (requestRebuild) {
-                                  requestRebuild();
-                                }
-                              }
-                          );
-                        },
-                    })
-                )
-            );
-          } else if (spec.key == "capsule_group" && !managedCapsuleGroups.empty()) {
+          if (spec.key == "capsule_group" && !managedCapsuleGroups.empty()) {
             SelectSetting selectSetting{
                 .options = managedCapsuleGroups, .selectedValue = settingValueAsString(value), .clearOnEmpty = true
             };
@@ -1160,6 +1160,9 @@ namespace settings {
           }
           break;
         }
+        case WidgetSettingValueType::Glyph:
+          ctx.makeRow(*panel, entry, makeGlyphTextControl(settingValueAsString(value)));
+          break;
         case WidgetSettingValueType::StringList:
           ctx.makeListBlock(*panel, entry, ListSetting{.items = settingValueAsStringList(value)});
           break;

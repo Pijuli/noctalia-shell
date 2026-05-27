@@ -13,6 +13,7 @@ namespace scripting {
     Int,
     Double,
     String,
+    Glyph,
     Select,
     Color,
   };

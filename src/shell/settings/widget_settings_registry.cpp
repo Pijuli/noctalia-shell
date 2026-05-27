@@ -192,6 +192,10 @@ namespace settings {
       return baseSpec(key, WidgetSettingValueType::String, std::move(defaultValue), advanced);
     }
 
+    WidgetSettingSpec glyphSpec(std::string_view key, std::string defaultValue = {}, bool advanced = false) {
+      return baseSpec(key, WidgetSettingValueType::Glyph, std::move(defaultValue), advanced);
+    }
+
     WidgetSettingSpec colorSpec(std::string_view key, std::string defaultValue = {}, bool advanced = false) {
       return baseSpec(key, WidgetSettingValueType::ColorSpec, std::move(defaultValue), advanced);
     }
@@ -589,7 +593,7 @@ namespace settings {
       add(stringSpec("format", "{:%H:%M}"));
       add(stringSpec("vertical_format"));
     } else if (type == "clipboard") {
-      add(stringSpec("glyph", "clipboard"));
+      add(glyphSpec("glyph", "clipboard"));
     } else if (type == "keyboard_layout") {
       add(stringSpec("cycle_command"));
       add(boolSpec("hide_when_single_layout", false));
@@ -601,13 +605,13 @@ namespace settings {
         add(std::move(display));
       }
     } else if (type == "launcher") {
-      add(stringSpec("glyph", "search"));
+      add(glyphSpec("glyph", "search"));
       add(stringSpec("custom_image", ""));
     } else if (type == "control-center") {
-      add(stringSpec("glyph", "noctalia"));
+      add(glyphSpec("glyph", "noctalia"));
       add(stringSpec("custom_image", ""));
     } else if (type == "custom_button") {
-      add(stringSpec("glyph", "heart"));
+      add(glyphSpec("glyph", "heart"));
       add(stringSpec("label"));
       add(stringSpec("tooltip"));
       add(stringSpec("command"));
@@ -636,9 +640,9 @@ namespace settings {
       add(boolSpec("hot_reload", false, true));
       add(stringSpec("script"));
     } else if (type == "session") {
-      add(stringSpec("glyph", "shutdown"));
+      add(glyphSpec("glyph", "shutdown"));
     } else if (type == "settings") {
-      add(stringSpec("glyph", "settings"));
+      add(glyphSpec("glyph", "settings"));
     } else if (type == "spacer") {
       add(doubleSpec("length", 20.0, 0.0, 400.0, 1.0));
     } else if (type == "sysmon") {
@@ -738,7 +742,7 @@ namespace settings {
       add(segmentedSpec("device", "output", volumeDeviceOptions));
       add(boolSpec("show_label", true));
     } else if (type == "wallpaper") {
-      add(stringSpec("glyph", "wallpaper-selector"));
+      add(glyphSpec("glyph", "wallpaper-selector"));
     } else if (type == "weather") {
       add(doubleSpec("max_length", 160.0, 40.0, 800.0, 1.0));
       add(boolSpec("show_condition", true));
@@ -827,6 +831,10 @@ namespace settings {
         break;
       case scripting::ManifestFieldType::Color:
         spec.valueType = WidgetSettingValueType::ColorSpec;
+        spec.defaultValue = field.stringDefault;
+        break;
+      case scripting::ManifestFieldType::Glyph:
+        spec.valueType = WidgetSettingValueType::Glyph;
         spec.defaultValue = field.stringDefault;
         break;
       case scripting::ManifestFieldType::String:

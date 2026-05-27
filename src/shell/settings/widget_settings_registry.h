@@ -50,6 +50,7 @@ namespace settings {
     Double,
     OptionalDouble,
     String,
+    Glyph,
     StringList,
     Select,
     ColorSpec,

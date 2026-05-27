@@ -288,6 +288,9 @@ namespace {
     if (type == "select" || type == "enum") {
       return scripting::ManifestFieldType::Select;
     }
+    if (type == "glyph") {
+      return scripting::ManifestFieldType::Glyph;
+    }
     if (type == "color") {
       return scripting::ManifestFieldType::Color;
     }
