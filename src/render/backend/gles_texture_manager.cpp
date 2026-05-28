@@ -258,7 +258,7 @@ void GlesTextureManager::cleanup() {
   }
 }
 
-void GlesTextureManager::flush() { glFinish(); }
+void GlesTextureManager::flush() { glFlush(); }
 
 void GlesTextureManager::probeExtensions() {
   const char* ext = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));

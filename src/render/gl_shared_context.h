@@ -25,11 +25,12 @@ public:
   [[nodiscard]] EGLConfig config() const noexcept { return m_config; }
   [[nodiscard]] EGLContext rootContext() const noexcept { return m_rootContext; }
 
+  // Bind the root context surfacelessly. Handy when a GL resource has to be
+  // created before any rendering surface exists.
   void makeCurrentSurfaceless() const;
 
 private:
   EGLDisplay m_display = EGL_NO_DISPLAY;
   EGLConfig m_config = nullptr;
   EGLContext m_rootContext = EGL_NO_CONTEXT;
-  EGLSurface m_pbuffer = EGL_NO_SURFACE;
 };

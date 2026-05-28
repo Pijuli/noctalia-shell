@@ -65,23 +65,18 @@ void GlSharedContext::initialize(wl_display* display) {
     throw std::runtime_error("eglCreateContext (root) failed");
   }
 
-  constexpr EGLint kPbufferAttributes[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};
-  m_pbuffer = eglCreatePbufferSurface(m_display, m_config, kPbufferAttributes);
-  if (m_pbuffer != EGL_NO_SURFACE) {
-    kLog.info("initialized EGL {}.{} with shared root context (pbuffer)", major, minor);
-  } else {
-    kLog.info("initialized EGL {}.{} with shared root context (surfaceless)", major, minor);
-  }
+  kLog.info("initialized EGL {}.{} with shared root context", major, minor);
 }
 
 void GlSharedContext::makeCurrentSurfaceless() const {
   if (m_display == EGL_NO_DISPLAY || m_rootContext == EGL_NO_CONTEXT) {
     return;
   }
-  EGLSurface draw = m_pbuffer != EGL_NO_SURFACE ? m_pbuffer : EGL_NO_SURFACE;
-  if (eglMakeCurrent(m_display, draw, draw, m_rootContext) != EGL_TRUE) {
+  if (eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, m_rootContext) != EGL_TRUE) {
     throw std::runtime_error(
-        std::format("eglMakeCurrent (root) failed (EGL error 0x{:04x})", static_cast<unsigned>(eglGetError()))
+        std::format(
+            "eglMakeCurrent (root, surfaceless) failed (EGL error 0x{:04x})", static_cast<unsigned>(eglGetError())
+        )
     );
   }
 }
@@ -92,11 +87,6 @@ void GlSharedContext::cleanup() {
   }
 
   eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-
-  if (m_pbuffer != EGL_NO_SURFACE) {
-    eglDestroySurface(m_display, m_pbuffer);
-    m_pbuffer = EGL_NO_SURFACE;
-  }
 
   if (m_rootContext != EGL_NO_CONTEXT) {
     eglDestroyContext(m_display, m_rootContext);
