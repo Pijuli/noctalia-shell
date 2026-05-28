@@ -16,6 +16,7 @@
 #include <optional>
 #include <pipewire/device.h>
 #include <pipewire/extensions/metadata.h>
+#include <pipewire/keys.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/param.h>
@@ -432,10 +433,18 @@ namespace {
 
   bool isProgramStreamClass(std::string_view mediaClass) { return mediaClass == "Stream/Output/Audio"; }
 
+  [[nodiscard]] bool isTruthyPipeWireProp(std::string_view value) { return value == "true" || value == "1"; }
+
   [[nodiscard]] bool isProgramOutputNode(const PipeWireService::NodeData& nd) {
-    // PipeWire loopback/filter helper endpoints are also Stream/* nodes, but they carry a link-group and
-    // should not be shown as standalone application streams.
-    return isProgramStreamClass(nd.mediaClass) && nd.linkGroup.empty();
+    // Match wpctl "Streams": Stream/Output/Audio without node.link-group. Loopback/filter endpoints also
+    // expose target.object or node.passive and must not appear as application volumes.
+    if (!isProgramStreamClass(nd.mediaClass)) {
+      return false;
+    }
+    if (!nd.linkGroup.empty() || !nd.targetObject.empty() || nd.nodePassive) {
+      return false;
+    }
+    return true;
   }
 
   void logProgramStreamMetadata(std::string_view phase, std::uint32_t id, const PipeWireService::NodeData& nd) {
@@ -728,7 +737,9 @@ void PipeWireService::onRegistryGlobal(std::uint32_t id, const char* type, std::
     if (nd->iconName.empty()) {
       nd->iconName = nd->applicationBinary;
     }
-    nd->linkGroup = dictGet(props, "node.link-group");
+    nd->linkGroup = dictGet(props, PW_KEY_NODE_LINK_GROUP);
+    nd->targetObject = dictGet(props, PW_KEY_TARGET_OBJECT);
+    nd->nodePassive = isTruthyPipeWireProp(dictGet(props, PW_KEY_NODE_PASSIVE));
     nd->mediaClass = mediaClass;
     const bool audioDeviceNode = mediaClass == "Audio/Sink" || mediaClass == "Audio/Source";
     applyVolumePropsFromDict(*nd, props, !audioDeviceNode);
@@ -855,41 +866,46 @@ void PipeWireService::onNodeInfo(std::uint32_t id, const pw_node_info* info) {
 
   // Update name/description from props if available
   if (info->props != nullptr) {
+    auto& nd = *it->second;
+    const std::string oldLinkGroup = nd.linkGroup;
+    const std::string oldTargetObject = nd.targetObject;
+    const bool oldNodePassive = nd.nodePassive;
+
     std::string desc = dictGet(info->props, PW_KEY_NODE_DESCRIPTION);
     if (!desc.empty()) {
-      it->second->description = desc;
+      nd.description = desc;
     }
     std::string name = dictGet(info->props, PW_KEY_NODE_NAME);
     if (!name.empty()) {
-      it->second->name = name;
+      nd.name = name;
     }
     std::string appName = dictGet(info->props, "application.name");
     if (appName.empty()) {
       appName = dictGet(info->props, "client.name");
     }
     if (!appName.empty()) {
-      it->second->applicationName = appName;
+      nd.applicationName = appName;
     }
     std::string appId = dictGet(info->props, "application.id");
     if (appId.ends_with(".desktop")) {
       appId.erase(appId.size() - std::string_view(".desktop").size());
     }
     if (!appId.empty()) {
-      it->second->applicationId = appId;
+      nd.applicationId = appId;
     }
-    const std::uint32_t clientId = parseUint32Or(dictGet(info->props, "client.id"), it->second->clientId);
+    const std::uint32_t clientId = parseUint32Or(dictGet(info->props, "client.id"), nd.clientId);
     if (clientId != 0) {
-      it->second->clientId = clientId;
+      nd.clientId = clientId;
     }
-    const std::uint32_t deviceId = parseUint32Or(dictGet(info->props, "device.id"), it->second->deviceId);
+    const std::uint32_t deviceId = parseUint32Or(dictGet(info->props, "device.id"), nd.deviceId);
     if (deviceId != 0) {
-      it->second->deviceId = deviceId;
+      nd.deviceId = deviceId;
     }
     std::string appBinary = dictGet(info->props, "application.process.binary");
     if (!appBinary.empty()) {
-      it->second->applicationBinary = appBinary;
-      if (it->second->applicationName.empty()) {
-        it->second->applicationName = appBinary;
+      nd.applicationBinary = appBinary;
+      if (nd.applicationName.empty()) {
+        nd.applicationName = appBinary;
       }
     }
     std::string mediaName = dictGet(info->props, "media.title");
@@ -897,20 +913,26 @@ void PipeWireService::onNodeInfo(std::uint32_t id, const pw_node_info* info) {
       mediaName = dictGet(info->props, "media.name");
     }
     if (!mediaName.empty()) {
-      it->second->streamTitle = mediaName;
+      nd.streamTitle = mediaName;
     }
     std::string iconName = dictGet(info->props, "application.icon-name");
     if (iconName.empty()) {
       iconName = dictGet(info->props, "node.icon-name");
     }
     if (!iconName.empty()) {
-      it->second->iconName = iconName;
+      nd.iconName = iconName;
     }
-    it->second->linkGroup = dictGet(info->props, "node.link-group");
-    const bool audioDevice = it->second->mediaClass == "Audio/Sink" || it->second->mediaClass == "Audio/Source";
-    applyVolumePropsFromDict(*it->second, info->props, !audioDevice);
-    refreshNodeIdentity(*it->second);
-    logProgramStreamMetadata("node-info", id, *it->second);
+    nd.linkGroup = dictGet(info->props, PW_KEY_NODE_LINK_GROUP);
+    nd.targetObject = dictGet(info->props, PW_KEY_TARGET_OBJECT);
+    nd.nodePassive = isTruthyPipeWireProp(dictGet(info->props, PW_KEY_NODE_PASSIVE));
+    const bool audioDevice = nd.mediaClass == "Audio/Sink" || nd.mediaClass == "Audio/Source";
+    applyVolumePropsFromDict(nd, info->props, !audioDevice);
+    refreshNodeIdentity(nd);
+    logProgramStreamMetadata("node-info", id, nd);
+
+    if (nd.linkGroup != oldLinkGroup || nd.targetObject != oldTargetObject || nd.nodePassive != oldNodePassive) {
+      rebuildState();
+    }
   }
 
   // Request Props param enumeration if changes flagged

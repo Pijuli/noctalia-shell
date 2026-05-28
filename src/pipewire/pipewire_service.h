@@ -122,6 +122,8 @@ public:
     std::string iconName;
     std::string mediaClass;
     std::string linkGroup;
+    std::string targetObject;
+    bool nodePassive = false;
     float volume = 1.0f;
     // Software / node-route mute from PipeWire props (SPA_PARAM_Props, node routes).
     bool swMute = false;
