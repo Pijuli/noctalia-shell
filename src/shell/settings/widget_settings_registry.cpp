@@ -630,6 +630,7 @@ namespace settings {
       ));
       add(boolSpec("save_to_file", true));
       add(boolSpec("copy_to_clipboard", false));
+      add(boolSpec("freeze_screen", false));
       add(boolSpec("pipe_to_command", false));
       {
         auto pipeCommand = stringSpec("pipe_command", "");

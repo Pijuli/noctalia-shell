@@ -261,6 +261,12 @@ void ScreencopyCapture::capture(
   wl_display_flush(wayland().display());
 }
 
+void ScreencopyCapture::cancelInFlight() {
+  destroyPending();
+  m_busy = false;
+  m_onComplete = {};
+}
+
 void ScreencopyCapture::fail(std::string message) {
   destroyPending();
   m_busy = false;

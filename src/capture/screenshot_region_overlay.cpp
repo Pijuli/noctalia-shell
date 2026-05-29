@@ -14,13 +14,17 @@
 #include "render/scene/input_dispatcher.h"
 #include "render/scene/node.h"
 #include "ui/controls/box.h"
+#include "ui/controls/image.h"
+#include "ui/controls/label.h"
 #include "ui/palette.h"
+#include "ui/style.h"
 #include "wayland/layer_surface.h"
 #include "wayland/wayland_connection.h"
 #include "wayland/wayland_seat.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <linux/input-event-codes.h>
 #include <memory>
 
@@ -28,6 +32,11 @@ namespace capture {
   namespace {
 
     constexpr Logger kLog("screenshot-region");
+    constexpr float kDimensionFontSize = 14.0f;
+    constexpr float kDimensionCursorOffsetX = 12.0f;
+    constexpr float kDimensionCursorOffsetY = 14.0f;
+    constexpr float kDimensionPaddingX = 6.0f;
+    constexpr float kDimensionPaddingY = 4.0f;
 
     [[nodiscard]] const WaylandOutput* findOutput(const WaylandConnection& wayland, wl_output* output) {
       for (const auto& entry : wayland.outputs()) {
@@ -42,6 +51,16 @@ namespace capture {
       return compositors::isHyprland() ? LayerShellKeyboard::Exclusive : LayerShellKeyboard::None;
     }
 
+    [[nodiscard]] const ScreencopyImage*
+    frozenImageForOutput(const std::vector<FrozenScreenshot>& screenshots, wl_output* output) {
+      for (const auto& entry : screenshots) {
+        if (entry.output == output) {
+          return &entry.image;
+        }
+      }
+      return nullptr;
+    }
+
   } // namespace
 
   struct ScreenshotRegionOverlay::Instance {
@@ -49,8 +68,11 @@ namespace capture {
     std::unique_ptr<LayerSurface> surface;
     std::unique_ptr<Node> sceneRoot;
     InputArea* input = nullptr;
+    Image* backdrop = nullptr;
     Box* dim = nullptr;
     Box* selection = nullptr;
+    Box* dimensionsBadge = nullptr;
+    Label* dimensionsLabel = nullptr;
     AnimationManager animations;
     InputDispatcher inputDispatcher;
     bool pointerInside = false;
@@ -67,10 +89,16 @@ namespace capture {
 
   void ScreenshotRegionOverlay::setCompleteCallback(CompleteCallback callback) { m_onComplete = std::move(callback); }
 
-  void ScreenshotRegionOverlay::begin() {
+  void ScreenshotRegionOverlay::setFrozenScreenshots(std::vector<FrozenScreenshot> screenshots) {
+    m_frozenScreenshots = std::move(screenshots);
+  }
+
+  void ScreenshotRegionOverlay::begin(bool freezeScreen) {
     if (m_wayland == nullptr || m_renderContext == nullptr) {
       return;
     }
+    destroySurfaces();
+    m_freezeScreen = freezeScreen;
     m_active = true;
     m_dragging = false;
     ensureSurfaces();
@@ -85,6 +113,8 @@ namespace capture {
   void ScreenshotRegionOverlay::cancel() {
     m_active = false;
     m_dragging = false;
+    m_freezeScreen = false;
+    m_frozenScreenshots.clear();
     destroySurfaces();
   }
 
@@ -166,6 +196,9 @@ namespace capture {
   void ScreenshotRegionOverlay::destroySurfaces() {
     for (auto& inst : m_instances) {
       if (inst != nullptr) {
+        if (inst->backdrop != nullptr && m_renderContext != nullptr) {
+          inst->backdrop->clear(*m_renderContext);
+        }
         inst->inputDispatcher.setSceneRoot(nullptr);
         inst->animations.cancelAll();
       }
@@ -273,11 +306,27 @@ namespace capture {
     });
     input->setFocusable(true);
 
+    const auto* frozen = m_freezeScreen ? frozenImageForOutput(m_frozenScreenshots, inst.output) : nullptr;
+    if (frozen != nullptr) {
+      auto backdrop = std::make_unique<Image>();
+      backdrop->setFit(ImageFit::Stretch);
+      backdrop->setPosition(0.0f, 0.0f);
+      backdrop->setSize(w, h);
+      if (!backdrop->setSourceRaw(
+              *m_renderContext, frozen->rgba.data(), frozen->rgba.size(), frozen->width, frozen->height,
+              frozen->width * 4, PixmapFormat::RGBA, false
+          )) {
+        kLog.warn("failed to upload frozen screenshot backdrop");
+      }
+      inst.backdrop = static_cast<Image*>(input->addChild(std::move(backdrop)));
+    }
+
     auto dim = std::make_unique<Box>();
     dim->setFill(colorSpecFromRole(ColorRole::Surface));
     dim->setOpacity(0.45f);
     dim->setPosition(0.0f, 0.0f);
     dim->setSize(w, h);
+    inst.dim = static_cast<Box*>(input->addChild(std::move(dim)));
 
     auto selection = std::make_unique<Box>();
     Color fill = colorForRole(ColorRole::Primary);
@@ -288,8 +337,22 @@ namespace capture {
     selection->setBorder(fixedColorSpec(border), 2.0f);
     selection->setVisible(false);
 
-    inst.dim = static_cast<Box*>(input->addChild(std::move(dim)));
+    auto dimensionsBadge = std::make_unique<Box>();
+    Color badgeFill = colorForRole(ColorRole::Surface);
+    badgeFill.a = 0.94f;
+    dimensionsBadge->setFill(fixedColorSpec(badgeFill));
+    dimensionsBadge->setBorder(fixedColorSpec(border), 1.0f);
+    dimensionsBadge->setRadius(Style::radiusSm);
+    dimensionsBadge->setVisible(false);
+
+    auto dimensionsLabel = std::make_unique<Label>();
+    dimensionsLabel->setFontSize(kDimensionFontSize);
+    dimensionsLabel->setFontWeight(FontWeight::Bold);
+    dimensionsLabel->setColor(border);
+
+    inst.dimensionsLabel = static_cast<Label*>(dimensionsBadge->addChild(std::move(dimensionsLabel)));
     inst.selection = static_cast<Box*>(input->addChild(std::move(selection)));
+    inst.dimensionsBadge = static_cast<Box*>(input->addChild(std::move(dimensionsBadge)));
     inst.input = input.get();
     inst.sceneRoot->addChild(std::move(input));
     inst.surface->setSceneRoot(inst.sceneRoot.get());
@@ -403,6 +466,9 @@ namespace capture {
         if (inst->selection != nullptr) {
           inst->selection->setVisible(false);
         }
+        if (inst->dimensionsBadge != nullptr) {
+          inst->dimensionsBadge->setVisible(false);
+        }
       }
       return;
     }
@@ -411,6 +477,13 @@ namespace capture {
     const int globalY0 = static_cast<int>(std::floor(std::min(m_startGlobalY, m_currentGlobalY)));
     const int globalX1 = static_cast<int>(std::ceil(std::max(m_startGlobalX, m_currentGlobalX)));
     const int globalY1 = static_cast<int>(std::ceil(std::max(m_startGlobalY, m_currentGlobalY)));
+    const int selectionWidth = globalX1 - globalX0;
+    const int selectionHeight = globalY1 - globalY0;
+    const int cursorGlobalX = static_cast<int>(std::lround(m_currentGlobalX));
+    const int cursorGlobalY = static_cast<int>(std::lround(m_currentGlobalY));
+
+    char dimensionText[32];
+    std::snprintf(dimensionText, sizeof(dimensionText), "%dx%d", selectionWidth, selectionHeight);
 
     for (auto& inst : m_instances) {
       if (inst->selection == nullptr || inst->surface == nullptr) {
@@ -419,6 +492,9 @@ namespace capture {
       const auto* out = findOutput(*m_wayland, inst->output);
       if (out == nullptr) {
         inst->selection->setVisible(false);
+        if (inst->dimensionsBadge != nullptr) {
+          inst->dimensionsBadge->setVisible(false);
+        }
         continue;
       }
 
@@ -433,12 +509,44 @@ namespace capture {
       const int iy1 = std::min(globalY1, outBottom);
       if (ix1 <= ix0 || iy1 <= iy0) {
         inst->selection->setVisible(false);
+        if (inst->dimensionsBadge != nullptr) {
+          inst->dimensionsBadge->setVisible(false);
+        }
         continue;
       }
 
       inst->selection->setVisible(true);
       inst->selection->setPosition(static_cast<float>(ix0 - outLeft), static_cast<float>(iy0 - outTop));
       inst->selection->setSize(static_cast<float>(ix1 - ix0), static_cast<float>(iy1 - iy0));
+
+      if (inst->dimensionsBadge != nullptr && inst->dimensionsLabel != nullptr && m_renderContext != nullptr) {
+        const bool cursorOnOutput = cursorGlobalX >= outLeft
+            && cursorGlobalX < outRight
+            && cursorGlobalY >= outTop
+            && cursorGlobalY < outBottom;
+        if (cursorOnOutput) {
+          inst->dimensionsLabel->setText(dimensionText);
+          inst->dimensionsLabel->measure(*m_renderContext);
+          const float badgeWidth = inst->dimensionsLabel->width() + (kDimensionPaddingX * 2.0f);
+          const float badgeHeight = inst->dimensionsLabel->height() + (kDimensionPaddingY * 2.0f);
+          inst->dimensionsBadge->setSize(badgeWidth, badgeHeight);
+
+          const float surfaceW = static_cast<float>(inst->surface->width());
+          const float surfaceH = static_cast<float>(inst->surface->height());
+          float badgeX = static_cast<float>(cursorGlobalX - outLeft) + kDimensionCursorOffsetX;
+          float badgeY = static_cast<float>(cursorGlobalY - outTop) + kDimensionCursorOffsetY;
+          const float maxX = std::max(0.0f, surfaceW - badgeWidth);
+          const float maxY = std::max(0.0f, surfaceH - badgeHeight);
+          badgeX = std::clamp(badgeX, 0.0f, maxX);
+          badgeY = std::clamp(badgeY, 0.0f, maxY);
+
+          inst->dimensionsBadge->setPosition(badgeX, badgeY);
+          inst->dimensionsLabel->setPosition(kDimensionPaddingX, kDimensionPaddingY);
+          inst->dimensionsBadge->setVisible(true);
+        } else {
+          inst->dimensionsBadge->setVisible(false);
+        }
+      }
     }
   }
 
@@ -491,11 +599,22 @@ namespace capture {
       return;
     }
 
+    const int ix0 = std::max(globalX0, out->logicalX);
+    const int iy0 = std::max(globalY0, out->logicalY);
+    const int ix1 = std::min(globalX1, out->logicalX + out->logicalWidth);
+    const int iy1 = std::min(globalY1, out->logicalY + out->logicalHeight);
+    if (ix1 <= ix0 || iy1 <= iy0) {
+      if (m_onComplete) {
+        m_onComplete(std::nullopt, nullptr);
+      }
+      return;
+    }
+
     LogicalRect region{
-        .x = globalX0 - out->logicalX,
-        .y = globalY0 - out->logicalY,
-        .width = width,
-        .height = height,
+        .x = ix0 - out->logicalX,
+        .y = iy0 - out->logicalY,
+        .width = ix1 - ix0,
+        .height = iy1 - iy0,
     };
     if (m_onComplete) {
       m_onComplete(region, chosenOutput);

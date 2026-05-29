@@ -1321,6 +1321,10 @@
           "label": "Copy to clipboard",
           "description": "Place the captured PNG on the clipboard selection"
         },
+        "freeze_screen": {
+          "label": "Freeze screen",
+          "description": "Capture the desktop before region selection so moving content stays still"
+        },
         "pipe_to_command": {
           "label": "Pipe to command",
           "description": "Send the captured PNG to a shell command on stdin"

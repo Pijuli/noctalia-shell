@@ -37,6 +37,7 @@ public:
   [[nodiscard]] WaylandConnection& wayland() noexcept { return m_wayland; }
 
   void capture(wl_output* output, std::optional<LogicalRect> region, bool overlayCursor, CompletionCallback onComplete);
+  void cancelInFlight();
 
   void fail(std::string message);
   void finish(ScreencopyImage image);

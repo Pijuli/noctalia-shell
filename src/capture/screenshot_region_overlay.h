@@ -13,6 +13,11 @@ struct PointerEvent;
 
 namespace capture {
 
+  struct FrozenScreenshot {
+    wl_output* output = nullptr;
+    ScreencopyImage image;
+  };
+
   class ScreenshotRegionOverlay {
   public:
     using CompleteCallback = std::function<void(std::optional<LogicalRect>, wl_output* output)>;
@@ -22,7 +27,8 @@ namespace capture {
 
     void initialize(WaylandConnection& wayland, RenderContext* renderContext);
     void setCompleteCallback(CompleteCallback callback);
-    void begin();
+    void setFrozenScreenshots(std::vector<FrozenScreenshot> screenshots);
+    void begin(bool freezeScreen);
     void cancel();
     void onOutputChange();
 
@@ -44,7 +50,9 @@ namespace capture {
     RenderContext* m_renderContext = nullptr;
     CompleteCallback m_onComplete;
     std::vector<std::unique_ptr<Instance>> m_instances;
+    std::vector<FrozenScreenshot> m_frozenScreenshots;
     bool m_active = false;
+    bool m_freezeScreen = false;
     bool m_dragging = false;
     double m_startGlobalX = 0.0;
     double m_startGlobalY = 0.0;

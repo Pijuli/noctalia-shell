@@ -7,6 +7,7 @@
 #include "compositors/niri/niri_runtime.h"
 #include "config/config_service.h"
 #include "config/config_types.h"
+#include "core/deferred_call.h"
 #include "core/log.h"
 #include "ipc/ipc_service.h"
 #include "notification/notification.h"
@@ -34,6 +35,7 @@
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
+#include <wayland-client.h>
 
 namespace {
 
@@ -92,6 +94,111 @@ namespace {
 
   [[nodiscard]] bool hasAnyOutput(const ScreenshotService::OutputOptions& options) {
     return options.saveToFile || options.copyToClipboard || (options.pipeToCommand && !options.pipeCommand.empty());
+  }
+
+  [[nodiscard]] const WaylandOutput* findOutput(const WaylandConnection& wayland, wl_output* output) {
+    for (const auto& entry : wayland.outputs()) {
+      if (entry.output == output) {
+        return &entry;
+      }
+    }
+    return nullptr;
+  }
+
+  [[nodiscard]] std::optional<ScreencopyImage>
+  cropFrozenRegion(const ScreencopyImage& source, int logicalOutputWidth, int logicalOutputHeight, LogicalRect region) {
+    if (logicalOutputWidth <= 0 || logicalOutputHeight <= 0 || region.width <= 0 || region.height <= 0) {
+      return std::nullopt;
+    }
+
+    const double scaleX = static_cast<double>(source.width) / static_cast<double>(logicalOutputWidth);
+    const double scaleY = static_cast<double>(source.height) / static_cast<double>(logicalOutputHeight);
+
+    LogicalRect clipped = region;
+    clipped.x = std::clamp(region.x, 0, logicalOutputWidth);
+    clipped.y = std::clamp(region.y, 0, logicalOutputHeight);
+    clipped.width = std::clamp(region.width, 0, logicalOutputWidth - clipped.x);
+    clipped.height = std::clamp(region.height, 0, logicalOutputHeight - clipped.y);
+    if (clipped.width <= 0 || clipped.height <= 0) {
+      return std::nullopt;
+    }
+
+    const int srcX0 = std::clamp(static_cast<int>(std::floor(clipped.x * scaleX)), 0, source.width);
+    const int srcY0 = std::clamp(static_cast<int>(std::floor(clipped.y * scaleY)), 0, source.height);
+    const int srcX1 = std::clamp(static_cast<int>(std::ceil((clipped.x + clipped.width) * scaleX)), 0, source.width);
+    const int srcY1 = std::clamp(static_cast<int>(std::ceil((clipped.y + clipped.height) * scaleY)), 0, source.height);
+    const int outWidth = srcX1 - srcX0;
+    const int outHeight = srcY1 - srcY0;
+    if (outWidth <= 0 || outHeight <= 0) {
+      return std::nullopt;
+    }
+
+    ScreencopyImage cropped;
+    cropped.width = outWidth;
+    cropped.height = outHeight;
+    cropped.rgba.resize(static_cast<std::size_t>(outWidth) * static_cast<std::size_t>(outHeight) * 4U);
+
+    for (int y = 0; y < outHeight; ++y) {
+      const int srcY = srcY0 + y;
+      const auto* srcRow = source.rgba.data()
+          + (static_cast<std::size_t>(srcY) * static_cast<std::size_t>(source.width) + static_cast<std::size_t>(srcX0))
+              * 4U;
+      auto* dstRow = cropped.rgba.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(outWidth) * 4U;
+      std::memcpy(dstRow, srcRow, static_cast<std::size_t>(outWidth) * 4U);
+    }
+
+    return cropped;
+  }
+
+  [[nodiscard]] capture::FrozenScreenshot*
+  findFrozenScreenshot(std::vector<capture::FrozenScreenshot>& screenshots, wl_output* output) {
+    for (auto& entry : screenshots) {
+      if (entry.output == output) {
+        return &entry;
+      }
+    }
+    return nullptr;
+  }
+
+  [[nodiscard]] bool captureOutputBlocking(
+      ScreencopyCapture& capture, WaylandConnection& wayland, wl_output* output, ScreencopyImage& out,
+      std::string& error
+  ) {
+    error.clear();
+    bool finished = false;
+    capture.capture(output, std::nullopt, false, [&](std::optional<ScreencopyImage> image, const std::string& err) {
+      finished = true;
+      if (!err.empty() || !image.has_value()) {
+        error = err.empty() ? "screencopy capture failed" : err;
+        return;
+      }
+      out = std::move(*image);
+    });
+
+    if (!error.empty()) {
+      return false;
+    }
+
+    while (!finished && capture.busy()) {
+      if (wl_display_roundtrip(wayland.display()) < 0) {
+        error = "Wayland roundtrip failed";
+        return false;
+      }
+    }
+
+    if (!error.empty() || !finished) {
+      if (error.empty()) {
+        error = "screencopy capture failed";
+      }
+      return false;
+    }
+
+    if (out.width <= 0 || out.height <= 0 || out.rgba.empty()) {
+      error = "screencopy capture returned an empty frame";
+      return false;
+    }
+
+    return true;
   }
 
   [[nodiscard]] bool isScreenshotWidget(const Config& cfg, std::string_view name) {
@@ -251,6 +358,7 @@ ScreenshotService::OutputOptions ScreenshotService::outputOptionsFromWidget(cons
   options.copyToClipboard = widget.getBool("copy_to_clipboard", false);
   options.pipeCommand = widget.getString("pipe_command", "");
   options.pipeToCommand = widget.getBool("pipe_to_command", false);
+  options.freezeScreen = widget.getBool("freeze_screen", false);
   if (!options.pipeToCommand && !options.pipeCommand.empty()) {
     options.pipeToCommand = true;
   }
@@ -357,18 +465,138 @@ void ScreenshotService::beginRegionCapture(RenderContext& renderContext, const O
     notifyError("No screenshot output enabled");
     return;
   }
+  if (m_regionOverlay != nullptr && m_regionOverlay->isActive()) {
+    m_regionOverlay->cancel();
+  }
+  if (m_freezeCaptureActive) {
+    abortFreezeCapture("Screenshot cancelled");
+  }
+
   m_regionOutputOptions = options;
+  m_regionRenderContext = &renderContext;
+
+  if (options.freezeScreen) {
+    DeferredCall::callLater([this]() { beginFreezeCapture(); });
+    return;
+  }
+
+  startRegionOverlay(renderContext);
+}
+
+void ScreenshotService::ensureRegionOverlay() {
+  if (m_regionRenderContext == nullptr) {
+    return;
+  }
   if (m_regionOverlay == nullptr) {
     m_regionOverlay = std::make_unique<capture::ScreenshotRegionOverlay>();
-    m_regionOverlay->initialize(m_wayland, &renderContext);
-    m_regionOverlay->setCompleteCallback([this](std::optional<LogicalRect> region, wl_output* output) {
-      if (!region.has_value() || output == nullptr) {
-        return;
-      }
-      captureOutput(output, region, "region", m_regionOutputOptions);
-    });
   }
-  m_regionOverlay->begin();
+  m_regionOverlay->initialize(m_wayland, m_regionRenderContext);
+  m_regionOverlay->setCompleteCallback([this](std::optional<LogicalRect> region, wl_output* output) {
+    if (!region.has_value() || output == nullptr) {
+      m_frozenScreenshots.clear();
+      return;
+    }
+    if (m_regionOutputOptions.freezeScreen && !m_frozenScreenshots.empty()) {
+      deliverFrozenRegion(*region, output, m_regionOutputOptions);
+      return;
+    }
+    captureOutput(output, region, "region", m_regionOutputOptions);
+  });
+}
+
+void ScreenshotService::startRegionOverlay(RenderContext& renderContext) {
+  m_regionRenderContext = &renderContext;
+  ensureRegionOverlay();
+  m_regionOverlay->setFrozenScreenshots({});
+  m_regionOverlay->begin(false);
+}
+
+void ScreenshotService::beginFreezeCapture() {
+  if (m_regionRenderContext == nullptr) {
+    notifyError("Render context unavailable");
+    return;
+  }
+
+  m_frozenScreenshots.clear();
+  m_pendingFreezeOutputs.clear();
+  for (const auto& output : m_wayland.outputs()) {
+    if (output.output != nullptr && output.logicalWidth > 0 && output.logicalHeight > 0) {
+      m_pendingFreezeOutputs.push_back(output.output);
+    }
+  }
+  if (m_pendingFreezeOutputs.empty()) {
+    notifyError("No outputs available");
+    return;
+  }
+
+  m_freezeCaptureActive = true;
+
+  while (!m_pendingFreezeOutputs.empty()) {
+    wl_output* output = m_pendingFreezeOutputs.front();
+    m_pendingFreezeOutputs.erase(m_pendingFreezeOutputs.begin());
+
+    if (m_capture.busy()) {
+      m_capture.cancelInFlight();
+    }
+
+    ScreencopyImage image;
+    std::string error;
+    if (!captureOutputBlocking(m_capture, m_wayland, output, image, error)) {
+      abortFreezeCapture(error.empty() ? "Failed to freeze screen" : error);
+      return;
+    }
+    m_frozenScreenshots.push_back(capture::FrozenScreenshot{.output = output, .image = std::move(image)});
+  }
+
+  m_freezeCaptureActive = false;
+  finishFreezeCapture();
+}
+
+void ScreenshotService::finishFreezeCapture() {
+  if (m_regionRenderContext == nullptr) {
+    notifyError("Render context unavailable");
+    m_frozenScreenshots.clear();
+    return;
+  }
+  if (m_frozenScreenshots.empty()) {
+    notifyError("Failed to freeze screen");
+    return;
+  }
+
+  ensureRegionOverlay();
+  m_regionOverlay->setFrozenScreenshots(m_frozenScreenshots);
+  m_regionOverlay->begin(true);
+}
+
+void ScreenshotService::abortFreezeCapture(const std::string& message) {
+  m_freezeCaptureActive = false;
+  m_pendingFreezeOutputs.clear();
+  m_frozenScreenshots.clear();
+  m_capture.cancelInFlight();
+  if (!message.empty()) {
+    notifyError(message);
+  }
+}
+
+void ScreenshotService::deliverFrozenRegion(LogicalRect region, wl_output* output, const OutputOptions& options) {
+  auto* frozen = findFrozenScreenshot(m_frozenScreenshots, output);
+  const auto* out = findOutput(m_wayland, output);
+  if (frozen == nullptr || out == nullptr) {
+    notifyError("Failed to crop frozen screenshot");
+    m_frozenScreenshots.clear();
+    return;
+  }
+
+  auto cropped = cropFrozenRegion(frozen->image, out->logicalWidth, out->logicalHeight, region);
+  m_frozenScreenshots.clear();
+  if (!cropped.has_value()) {
+    notifyError("Failed to crop frozen screenshot");
+    return;
+  }
+
+  const std::optional<std::filesystem::path> destPath =
+      options.saveToFile ? std::optional(makeScreenshotPath(options, "region")) : std::nullopt;
+  onCaptureComplete(std::move(*cropped), {}, options, destPath);
 }
 
 void ScreenshotService::captureWindow(const std::string& windowId, const OutputOptions& options) {

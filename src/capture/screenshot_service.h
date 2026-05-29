@@ -28,6 +28,7 @@ public:
     bool saveToFile = true;
     bool copyToClipboard = false;
     bool pipeToCommand = false;
+    bool freezeScreen = false;
     std::string pipeCommand;
     std::string directory;
     std::string filenamePattern;
@@ -78,6 +79,12 @@ private:
       wl_output* output, std::optional<LogicalRect> region, const std::string& labelBase, const OutputOptions& options,
       int pathSuffix = 0
   );
+  void ensureRegionOverlay();
+  void startRegionOverlay(RenderContext& renderContext);
+  void beginFreezeCapture();
+  void finishFreezeCapture();
+  void abortFreezeCapture(const std::string& message);
+  void deliverFrozenRegion(LogicalRect region, wl_output* output, const OutputOptions& options);
   void startNextQueuedCapture();
   void captureAllOutputs(const OutputOptions& options);
   void onCaptureComplete(
@@ -100,4 +107,8 @@ private:
   std::unique_ptr<capture::ScreenshotRegionOverlay> m_regionOverlay;
   std::vector<PendingCapture> m_captureQueue;
   OutputOptions m_regionOutputOptions{};
+  RenderContext* m_regionRenderContext = nullptr;
+  std::vector<capture::FrozenScreenshot> m_frozenScreenshots;
+  std::vector<wl_output*> m_pendingFreezeOutputs;
+  bool m_freezeCaptureActive = false;
 };
