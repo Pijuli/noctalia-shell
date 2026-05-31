@@ -100,7 +100,7 @@ private:
   );
   void onCaptureComplete(
       std::optional<ScreencopyImage> image, const std::string& error, OutputOptions options,
-      std::optional<std::filesystem::path> destPath, wl_output* output, std::optional<LogicalRect> region
+      std::optional<std::filesystem::path> destPath, wl_output* output
   );
   [[nodiscard]] wl_output* preferredCaptureOutput() const;
   [[nodiscard]] std::filesystem::path defaultPicturesDirectory() const;

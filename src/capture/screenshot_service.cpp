@@ -288,29 +288,16 @@ namespace {
     }
   }
 
-  [[nodiscard]] bool normalizeCaptureToLogicalSize(
-      ScreencopyImage& image, const WaylandConnection& wayland, wl_output* output,
-      const std::optional<LogicalRect>& region
-  ) {
+  // Orient a capture into logical orientation (output transform + y-invert) while keeping its
+  // native physical pixel resolution. Resampling down to logical size would soften the image
+  // whenever fractional scaling makes the physical buffer larger than the logical output.
+  [[nodiscard]] bool orientCaptureNative(ScreencopyImage& image, const WaylandConnection& wayland, wl_output* output) {
     const auto* out = findOutput(wayland, output);
     if (out == nullptr) {
       return false;
     }
-
-    int targetWidth = 0;
-    int targetHeight = 0;
-    if (region.has_value() && region->width > 0 && region->height > 0) {
-      targetWidth = region->width;
-      targetHeight = region->height;
-    } else if (out->logicalWidth > 0 && out->logicalHeight > 0) {
-      targetWidth = out->logicalWidth;
-      targetHeight = out->logicalHeight;
-    } else {
-      return true;
-    }
-
     orientCaptureToLogical(image, *out);
-    return resampleRgbaImage(image, targetWidth, targetHeight);
+    return true;
   }
 
   [[nodiscard]] std::optional<ScreencopyImage>
@@ -353,10 +340,6 @@ namespace {
               * 4U;
       auto* dstRow = cropped.rgba.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(outWidth) * 4U;
       std::memcpy(dstRow, srcRow, static_cast<std::size_t>(outWidth) * 4U);
-    }
-
-    if (!resampleRgbaImage(cropped, clipped.width, clipped.height)) {
-      return std::nullopt;
     }
 
     return cropped;
@@ -596,17 +579,24 @@ namespace {
       return std::nullopt;
     }
 
-    for (auto& frame : frames) {
-      if (frame.output == nullptr) {
-        return std::nullopt;
-      }
-      if (!resampleRgbaImage(frame.image, frame.output->logicalWidth, frame.output->logicalHeight)) {
+    for (const auto& frame : frames) {
+      if (frame.output == nullptr || frame.output->logicalWidth <= 0 || frame.output->logicalHeight <= 0) {
         return std::nullopt;
       }
     }
 
     if (frames.size() == 1) {
       return std::move(frames.front().image);
+    }
+
+    // Stitch in physical pixels: pick a uniform canvas density equal to the highest captured
+    // scale so the sharpest monitor keeps its full resolution. Each logical layout coordinate is
+    // multiplied by this density; lower-density outputs are upscaled to keep the layout aligned.
+    double canvasScale = 1.0;
+    for (const auto& frame : frames) {
+      const double scaleX = static_cast<double>(frame.image.width) / static_cast<double>(frame.output->logicalWidth);
+      const double scaleY = static_cast<double>(frame.image.height) / static_cast<double>(frame.output->logicalHeight);
+      canvasScale = std::max({canvasScale, scaleX, scaleY});
     }
 
     int minLogicalX = frames.front().output->logicalX;
@@ -616,17 +606,19 @@ namespace {
       minLogicalY = std::min(minLogicalY, frame.output->logicalY);
     }
 
+    const auto scaled = [canvasScale](int logical) { return static_cast<int>(std::lround(logical * canvasScale)); };
+
     int canvasWidth = 0;
     int canvasHeight = 0;
-    for (const auto& frame : frames) {
+    for (auto& frame : frames) {
       const auto* out = frame.output;
-      if (out->logicalWidth <= 0 || out->logicalHeight <= 0) {
+      const int targetWidth = scaled(out->logicalWidth);
+      const int targetHeight = scaled(out->logicalHeight);
+      if (!resampleRgbaImage(frame.image, targetWidth, targetHeight)) {
         return std::nullopt;
       }
-      const int destX = out->logicalX - minLogicalX;
-      const int destY = out->logicalY - minLogicalY;
-      canvasWidth = std::max(canvasWidth, destX + out->logicalWidth);
-      canvasHeight = std::max(canvasHeight, destY + out->logicalHeight);
+      canvasWidth = std::max(canvasWidth, scaled(out->logicalX - minLogicalX) + targetWidth);
+      canvasHeight = std::max(canvasHeight, scaled(out->logicalY - minLogicalY) + targetHeight);
     }
 
     if (canvasWidth <= 0 || canvasHeight <= 0) {
@@ -640,7 +632,7 @@ namespace {
 
     for (const auto& frame : frames) {
       const auto* out = frame.output;
-      blitOpaqueRgba(canvas, out->logicalX - minLogicalX, out->logicalY - minLogicalY, frame.image);
+      blitOpaqueRgba(canvas, scaled(out->logicalX - minLogicalX), scaled(out->logicalY - minLogicalY), frame.image);
     }
 
     return canvas;
@@ -936,7 +928,7 @@ void ScreenshotService::beginFreezeCapture() {
       m_frozenScreenshots.clear();
       return;
     }
-    if (!normalizeCaptureToLogicalSize(image, m_wayland, output, std::nullopt)) {
+    if (!orientCaptureNative(image, m_wayland, output)) {
       abortFreezeCapture("Failed to orient frozen screenshot");
       return;
     }
@@ -1055,9 +1047,9 @@ void ScreenshotService::captureOutput(
 
   m_capture.capture(
       pending.output, pending.region, true,
-      [this, options = pending.outputOptions, destPath = pending.destPath, output = pending.output,
-       region = pending.region](std::optional<ScreencopyImage> image, const std::string& error) {
-        onCaptureComplete(std::move(image), error, std::move(options), std::move(destPath), output, region);
+      [this, options = pending.outputOptions, destPath = pending.destPath,
+       output = pending.output](std::optional<ScreencopyImage> image, const std::string& error) {
+        onCaptureComplete(std::move(image), error, std::move(options), std::move(destPath), output);
       }
   );
 }
@@ -1074,9 +1066,9 @@ void ScreenshotService::startNextQueuedCapture() {
     m_captureQueue.erase(m_captureQueue.begin());
     m_capture.capture(
         pending.output, pending.region, true,
-        [this, options = pending.outputOptions, destPath = pending.destPath, output = pending.output,
-         region = pending.region](std::optional<ScreencopyImage> image, const std::string& error) {
-          onCaptureComplete(std::move(image), error, std::move(options), std::move(destPath), output, region);
+        [this, options = pending.outputOptions, destPath = pending.destPath,
+         output = pending.output](std::optional<ScreencopyImage> image, const std::string& error) {
+          onCaptureComplete(std::move(image), error, std::move(options), std::move(destPath), output);
         }
     );
   });
@@ -1161,7 +1153,7 @@ void ScreenshotService::onAllOutputsFrameCaptured(
     cancelAllOutputsBatch();
     return;
   }
-  if (!normalizeCaptureToLogicalSize(*image, m_wayland, output, std::nullopt)) {
+  if (!orientCaptureNative(*image, m_wayland, output)) {
     notifyError("Failed to scale screenshot");
     cancelAllOutputsBatch();
     return;
@@ -1263,7 +1255,7 @@ void ScreenshotService::deliverCaptureResult(
 
 void ScreenshotService::onCaptureComplete(
     std::optional<ScreencopyImage> image, const std::string& error, OutputOptions options,
-    std::optional<std::filesystem::path> destPath, wl_output* output, std::optional<LogicalRect> region
+    std::optional<std::filesystem::path> destPath, wl_output* output
 ) {
   if (!error.empty() || !image.has_value()) {
     kLog.warn("screenshot failed: {}", error.empty() ? "empty frame" : error);
@@ -1272,7 +1264,7 @@ void ScreenshotService::onCaptureComplete(
     return;
   }
 
-  if (!normalizeCaptureToLogicalSize(*image, m_wayland, output, region)) {
+  if (!orientCaptureNative(*image, m_wayland, output)) {
     notifyError("Failed to scale screenshot");
     startNextQueuedCapture();
     return;
