@@ -152,6 +152,8 @@ private:
   std::vector<Label*> m_sessionActionSummaryLabels;
   std::shared_ptr<std::vector<SessionPanelActionConfig>> m_sessionActionsEditState;
 
+  // m_sceneRoot must be destroyed before m_animations — ~Node() calls cancelForOwner().
+  AnimationManager m_animations;
   std::unique_ptr<ToplevelSurface> m_surface;
   std::unique_ptr<Node> m_sceneRoot;
   Flex* m_mainContainer = nullptr; // Outer Flex inside m_sceneRoot, sized to the window
@@ -165,12 +167,9 @@ private:
   std::unique_ptr<settings::ConfigExportDialogPopup> m_configExportDialogPopup;
   std::unique_ptr<settings::SearchPickerPopup> m_searchPickerPopup;
   std::unique_ptr<settings::SettingsEditorSheetPopup> m_editorSheetPopup;
-  // Owns the control factory for the open bar-widget/capsule editor sheet; the sheet's populate
-  // callback builds controls through it, so it must outlive the popup.
   std::unique_ptr<settings::SettingsControlFactory> m_editorSheetFactory;
   std::vector<std::string> m_editorSheetListPath;
   InputDispatcher m_inputDispatcher;
-  AnimationManager m_animations;
   std::unique_ptr<SelectDropdownPopup> m_selectPopup;
   bool m_pointerInside = false;
   wl_output* m_output = nullptr;

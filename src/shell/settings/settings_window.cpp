@@ -66,7 +66,7 @@ namespace {
 
 } // namespace
 
-SettingsWindow::~SettingsWindow() = default;
+SettingsWindow::~SettingsWindow() { destroyWindow(); }
 
 void SettingsWindow::initialize(
     WaylandConnection& wayland, ConfigService* config, RenderContext* renderContext, DependencyService* dependencies,
@@ -318,6 +318,9 @@ void SettingsWindow::destroyWindow() {
   if (m_editorSheetPopup != nullptr) {
     m_editorSheetPopup->close();
     m_editorSheetPopup.reset();
+  }
+  if (m_selectPopup != nullptr) {
+    m_selectPopup->closeSelectDropdown();
   }
   m_sceneRoot.reset();
   m_surface.reset();
