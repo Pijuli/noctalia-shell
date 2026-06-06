@@ -20,13 +20,11 @@ in
   hjemModule = {
     imports = [ ./nix/hjem-module.nix ];
     programs.noctalia.package = mkDefault package;
-    _class = "hjem";
   };
 
   homeModule = {
     imports = [ ./nix/home-module.nix ];
     programs.noctalia.package = mkDefault package;
-    _class = "homeManager";
   };
 
   inherit package;
