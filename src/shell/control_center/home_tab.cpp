@@ -534,17 +534,13 @@ std::unique_ptr<Flex> HomeTab::createHeaderActions() {
           .out = &m_settingsButton,
           .glyph = "settings",
           .onClick = []() { PanelManager::instance().openSettingsWindow(); },
-          .configure = [scale, opacity = panelCardOpacity()](
-                           Button& button
-                       ) { panel_button_style::configureHeaderIconButton(button, scale, opacity); },
+          .configure = [scale](Button& button) { panel_button_style::configureHeaderIconButton(button, scale); },
       }),
       ui::button({
           .out = &m_sessionButton,
           .glyph = "shutdown",
           .onClick = []() { PanelManager::instance().togglePanel("session"); },
-          .configure = [scale, opacity = panelCardOpacity()](
-                           Button& button
-                       ) { panel_button_style::configureHeaderIconButton(button, scale, opacity); },
+          .configure = [scale](Button& button) { panel_button_style::configureHeaderIconButton(button, scale); },
       })
   );
 }
@@ -896,12 +892,7 @@ void HomeTab::onClose() {
 }
 
 void HomeTab::onPanelCardOpacityChanged(float opacity) {
-  if (m_settingsButton != nullptr) {
-    m_settingsButton->setSurfaceOpacity(opacity);
-  }
-  if (m_sessionButton != nullptr) {
-    m_sessionButton->setSurfaceOpacity(opacity);
-  }
+  (void)opacity;
   syncShortcuts();
 }
 
