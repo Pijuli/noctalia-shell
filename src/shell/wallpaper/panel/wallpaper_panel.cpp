@@ -639,8 +639,26 @@ void WallpaperPanel::create() {
             if (m_config->isWallpaperFavorite(path)) {
               m_config->setWallpaperFavoritePaletteSource(path, source);
             }
+
+            // Rebuild the palette picker for the new source before previewing. themeFromControls()
+            // reads both the segmented source and the detail select; without this, switching away
+            // from wallpaper applies a wallpaper-scheme value to the previous source's field.
+            WallpaperFavorite themeSettings;
+            if (const WallpaperFavorite* favorite = m_config->wallpaperFavorite(path); favorite != nullptr) {
+              themeSettings = *favorite;
+            } else {
+              themeSettings = wallpaperFavoriteFromTheme(m_config->config().theme);
+              themeSettings.paletteSource = source;
+            }
+            if (m_favoriteThemeSegmented != nullptr) {
+              themeSettings.themeMode = themeModeFromSegmentIndex(m_favoriteThemeSegmented->selectedIndex());
+            }
+
+            m_syncingFavoriteControls = true;
+            rebuildFavoritePaletteDetailSelect(&themeSettings);
+            m_syncingFavoriteControls = false;
+
             applyLiveThemePreview(path);
-            syncThemeControls();
             m_dirty = true;
             PanelManager::instance().refresh();
           },
