@@ -88,12 +88,12 @@ namespace {
   }
 
   Flex* makeInfoCard(
-      Flex& parent, const std::string& title, float scale, float fillOpacity, bool showBorder, Label** outLines,
-      int lineCount, const char* const* glyphs
+      Flex& parent, const std::string& title, float scale, float grow, float fillOpacity, bool showBorder,
+      Label** outLines, int lineCount, const char* const* glyphs
   ) {
     auto card = ui::column({
         .gap = Style::spaceXs * scale,
-        .flexGrow = 1.0f,
+        .flexGrow = grow,
         .configure = [scale, fillOpacity, showBorder](Flex& section) {
           applySectionCardStyle(section, scale, fillOpacity, showBorder);
         },
@@ -271,14 +271,13 @@ std::unique_ptr<Flex> SystemTab::create() {
     static constexpr const char* kSystemGlyphs[] = {"device-desktop", "layout-board", "cpu-usage",
                                                     "video",          "app-window",   "clock"};
     makeInfoCard(
-        *row, i18n::tr("control-center.system.titles.system"), sc, panelCardOpacity(), panelBordersEnabled(),
+        *row, i18n::tr("control-center.system.titles.system"), sc, 3.0f, panelCardOpacity(), panelBordersEnabled(),
         m_systemLines, kSystemLines, kSystemGlyphs
-    )
-        ->setFlexGrow(2.0f);
+    );
 
     static constexpr const char* kResourcesGlyphs[] = {"activity", "memory"};
     auto* resourcesCard = makeInfoCard(
-        *row, i18n::tr("control-center.system.titles.resources"), sc, panelCardOpacity(), panelBordersEnabled(),
+        *row, i18n::tr("control-center.system.titles.resources"), sc, 2.0f, panelCardOpacity(), panelBordersEnabled(),
         m_resourcesLines, kResourcesLines, kResourcesGlyphs
     );
 
@@ -307,23 +306,25 @@ std::unique_ptr<Flex> SystemTab::create() {
     m_diskLabels.reserve(m_diskMountPoints.size());
     for (std::size_t i = 0; i < m_diskMountPoints.size(); ++i) {
       Label* lineLabel = nullptr;
-      resourcesCard->addChild(
-          ui::row(
-              {.align = FlexAlign::Center, .gap = Style::spaceXs * sc},
-              ui::glyph({
-                  .glyph = "storage",
-                  .glyphSize = Style::fontSizeMini * sc,
-                  .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-              }),
-              ui::label({
-                  .out = &lineLabel,
-                  .fontSize = Style::fontSizeMini * sc,
-                  .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
-                  .maxLines = 1,
-                  .flexGrow = 1.0f,
-              })
+      resourcesCard
+          ->addChild(
+              ui::row(
+                  {.align = FlexAlign::Center, .gap = Style::spaceXs * sc},
+                  ui::glyph({
+                      .glyph = "storage",
+                      .glyphSize = Style::fontSizeMini * sc,
+                      .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
+                  }),
+                  ui::label({
+                      .out = &lineLabel,
+                      .fontSize = Style::fontSizeMini * sc,
+                      .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
+                      .maxLines = 1,
+                      .flexGrow = 1.0f,
+                  })
+              )
           )
-      );
+          ->setFlexGrow(2.0f);
       m_diskLabels.push_back(lineLabel);
     }
 

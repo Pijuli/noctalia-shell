@@ -13,5 +13,5 @@
 // so the root filesystem comes first. Excludes pseudo filesystems, snap/loop images, boot and EFI.
 [[nodiscard]] std::vector<std::string> physicalDiskMountPoints();
 
-// "used / total GB (NN%)" for the filesystem containing the given mount point.
+// "total GB (NN%)" for the filesystem containing the given mount point.
 [[nodiscard]] std::string diskUsageLabel(const std::string& mountPoint);
