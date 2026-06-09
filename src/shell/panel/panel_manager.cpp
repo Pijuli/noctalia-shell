@@ -8,6 +8,7 @@
 #include "core/ui_phase.h"
 #include "ipc/ipc_service.h"
 #include "render/render_context.h"
+#include "shell/clipboard/clipboard_panel.h"
 #include "shell/control_center/control_center_panel.h"
 #include "shell/surface/shadow.h"
 #include "shell/tooltip/tooltip_manager.h"
@@ -1973,6 +1974,12 @@ void PanelManager::registerIpc(IpcService& ipc) {
         if (!m_panels.contains(panelId)) {
           return unknownPanelError(panelId);
         }
+        if (panelId == "clipboard" && context == "clear") {
+          if (auto* clipboardPanel = dynamic_cast<ClipboardPanel*>(m_panels.at(panelId).get())) {
+            clipboardPanel->clearHistoryFromIpc();
+          }
+          return "ok\n";
+        }
         if (context.empty()) {
           togglePanel(panelId);
         } else {
@@ -1981,7 +1988,7 @@ void PanelManager::registerIpc(IpcService& ipc) {
         return "ok\n";
       },
       "panel-toggle <id> [context]",
-      "Toggle a panel by id, optionally with context (e.g. launcher /emo, control-center audio)"
+      "Toggle a panel by id, optionally with context (e.g. launcher /emo, control-center audio, clipboard clear)"
   );
 
   ipc.registerHandler(
