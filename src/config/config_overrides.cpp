@@ -698,28 +698,42 @@ void ConfigService::addPluginSource(const PluginSourceConfig& source) {
     return;
   }
 
+  const auto sourceTable = [](const PluginSourceConfig& src) {
+    toml::table entry;
+    entry.insert_or_assign("name", src.name);
+    entry.insert_or_assign("kind", std::string(enumToKey(kPluginSourceKinds, src.kind)));
+    entry.insert_or_assign("location", src.location);
+    if (src.autoUpdate) {
+      entry.insert_or_assign("auto_update", true);
+    }
+    return entry;
+  };
+
   auto* pluginsTbl = ensureTable(m_overridesTable, "plugins");
   auto* arr = pluginsTbl->get_as<toml::array>("source");
+  bool sourceWritten = false;
   if (arr == nullptr) {
-    auto [it, _] = pluginsTbl->insert_or_assign("source", toml::array{});
+    toml::array seededSources;
+    for (const auto& existing : m_config.plugins.sources) {
+      if (!isValidPluginSourceName(existing.name)) {
+        continue;
+      }
+      seededSources.push_back(sourceTable(existing.name == source.name ? source : existing));
+      sourceWritten = sourceWritten || existing.name == source.name;
+    }
+    auto [it, _] = pluginsTbl->insert_or_assign("source", std::move(seededSources));
     arr = it->second.as_array();
   }
 
-  // A source name is an identity, not a duplicate key — replace any existing entry.
-  for (auto it = arr->begin(); it != arr->end();) {
-    const auto* tbl = it->as_table();
-    const auto name = tbl != nullptr ? (*tbl)["name"].value<std::string>() : std::nullopt;
-    it = (name && *name == source.name) ? arr->erase(it) : it + 1;
+  if (!sourceWritten) {
+    // A source name is an identity, not a duplicate key — replace any existing entry.
+    for (auto it = arr->begin(); it != arr->end();) {
+      const auto* tbl = it->as_table();
+      const auto name = tbl != nullptr ? (*tbl)["name"].value<std::string>() : std::nullopt;
+      it = (name && *name == source.name) ? arr->erase(it) : it + 1;
+    }
+    arr->push_back(sourceTable(source));
   }
-
-  toml::table entry;
-  entry.insert_or_assign("name", source.name);
-  entry.insert_or_assign("kind", std::string(enumToKey(kPluginSourceKinds, source.kind)));
-  entry.insert_or_assign("location", source.location);
-  if (source.autoUpdate) {
-    entry.insert_or_assign("auto_update", true);
-  }
-  arr->push_back(std::move(entry));
 
   if (!writeOverridesToFile()) {
     kLog.warn("failed to write {}", m_overridesPath);

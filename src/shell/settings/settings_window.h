@@ -134,6 +134,7 @@ private:
   void openCalendarAccountEditor(std::optional<std::string> accountId);
   void openWidgetInspectorEditor(std::vector<std::string> laneListPath, std::string widgetName);
   void openCapsuleGroupEditor(std::vector<std::string> laneListPath, std::string groupId);
+  void openPluginSourceCreateEditor();
   void openPluginSettingsEditor(std::string pluginId);
   void openBarWidgetEditorSheet(std::string title, std::function<void(Flex&)> populate);
   void closeWidgetInspectorPopup();

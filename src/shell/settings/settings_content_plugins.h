@@ -25,6 +25,8 @@ namespace settings {
     bool pluginsLoading = false;
 
     std::function<void(std::string id, bool enable)> setEnabled;
+    std::function<void()> addSource;
+    std::function<void(PluginSourceConfig source, bool autoUpdate)> setSourceAutoUpdate;
     std::function<void(std::string source)> updateSource;
     std::function<void(std::string source)> removeSource;
     std::function<void()> refresh;

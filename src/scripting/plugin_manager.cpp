@@ -122,23 +122,30 @@ namespace scripting {
       std::string error;
       int exitCode = -1;
       bool timedOut = false;
+      bool incompatible = false;
+      std::string requiredNoctalia;
       std::filesystem::path pluginDir;
       PluginManifest manifest;
 
       explicit operator bool() const { return ok; }
     };
 
-    MaterializeResult materializeFailure(std::string error, int exitCode = -1, bool timedOut = false) {
+    MaterializeResult materializeFailure(
+        std::string error, int exitCode = -1, bool timedOut = false, bool incompatible = false,
+        std::string requiredNoctalia = {}
+    ) {
       MaterializeResult result;
       result.error = std::move(error);
       result.exitCode = exitCode;
       result.timedOut = timedOut;
+      result.incompatible = incompatible;
+      result.requiredNoctalia = std::move(requiredNoctalia);
       return result;
     }
 
     MaterializeResult materializeGitPlugin(
         const PluginSourceConfig& source, const std::filesystem::path& repoRoot, std::string_view rev,
-        std::string_view pluginId
+        std::string_view pluginId, bool requireCompatible = false
     ) {
       const auto subdir = pluginSubdirFromId(pluginId);
       if (!subdir.has_value()) {
@@ -178,6 +185,18 @@ namespace scripting {
         cleanupTmp();
         return materializeFailure("manifest id '" + manifest->id + "' does not match requested id");
       }
+      if (requireCompatible && !noctalia::version::atLeast(noctalia::build_info::version(), manifest->minNoctalia)) {
+        std::string error = "plugin '"
+            + manifest->id
+            + "' requires noctalia >= "
+            + manifest->minNoctalia
+            + " (running "
+            + std::string(noctalia::build_info::version())
+            + ")";
+        const std::string required = manifest->minNoctalia;
+        cleanupTmp();
+        return materializeFailure(std::move(error), -1, false, true, required);
+      }
 
       const auto finalDir = materializedRoot / *subdir;
       std::string replaceError;
@@ -191,6 +210,34 @@ namespace scripting {
       result.pluginDir = finalDir;
       result.manifest = std::move(*manifest);
       return result;
+    }
+
+    std::vector<CatalogEntry> readGitCatalog(const std::filesystem::path& repoRoot, std::string_view rev = "HEAD") {
+      const auto shown = plugin_git::showFile(repoRoot, "catalog.toml", rev);
+      if (!shown) {
+        return {};
+      }
+      return parseCatalogToml(shown.out);
+    }
+
+    const CatalogEntry* findCatalogEntry(const std::vector<CatalogEntry>& entries, std::string_view id) {
+      for (const auto& entry : entries) {
+        if (entry.id == id) {
+          return &entry;
+        }
+      }
+      return nullptr;
+    }
+
+    bool materializedPluginMatchesCatalog(
+        const PluginSourceConfig& source, std::string_view pluginId, const CatalogEntry& entry
+    ) {
+      std::string error;
+      const auto manifest = parsePluginManifest(materializedPluginDir(source, pluginId) / "plugin.toml", &error);
+      if (!manifest.has_value() || manifest->id != pluginId) {
+        return false;
+      }
+      return manifest->version == entry.version && manifest->minNoctalia == entry.minNoctalia;
     }
   } // namespace
 
@@ -284,22 +331,40 @@ namespace scripting {
           continue; // offline / unreachable — leave it; list/enable will retry
         }
       }
+      const auto catalog = readGitCatalog(repoRoot);
       for (const auto& id : plugins.enabled) {
         const auto sub = pluginSubdirFromId(id);
         if (!sub.has_value()) {
           kLog.warn("skipping enabled plugin with invalid id '{}'", id);
           continue;
         }
-        if (std::filesystem::exists(materializedPluginDir(source, id) / "plugin.toml", ec)) {
-          continue; // already materialized
+        const auto* catalogEntry = findCatalogEntry(catalog, id);
+        const bool hasMaterialized = std::filesystem::exists(materializedPluginDir(source, id) / "plugin.toml", ec);
+        if (catalogEntry != nullptr && !catalogEntry->compatible) {
+          if (!hasMaterialized) {
+            kLog.warn(
+                "plugin source '{}': cannot export enabled plugin '{}'; it requires noctalia >= {} (running {})",
+                source.name, id, catalogEntry->minNoctalia, noctalia::build_info::version()
+            );
+          }
+          continue;
+        }
+        if (hasMaterialized
+            && (catalogEntry == nullptr || materializedPluginMatchesCatalog(source, id, *catalogEntry))) {
+          continue; // already materialized at this source revision
         }
         if (!plugin_git::hasPath(repoRoot, *sub + "/plugin.toml")) {
           continue; // this source doesn't ship it
         }
         kLog.info("exporting enabled plugin '{}' from source '{}'", id, source.name);
-        const auto materializedPlugin = materializeGitPlugin(source, repoRoot, "HEAD", id);
+        const auto materializedPlugin = materializeGitPlugin(source, repoRoot, "HEAD", id, true);
         if (materializedPlugin) {
           materialized = true;
+        } else if (materializedPlugin.incompatible) {
+          kLog.warn(
+              "plugin source '{}': cannot export enabled plugin '{}'; it requires noctalia >= {} (running {})",
+              source.name, id, materializedPlugin.requiredNoctalia, noctalia::build_info::version()
+          );
         } else if (materializedPlugin.timedOut) {
           kLog.warn("plugin source '{}': exporting '{}' timed out", source.name, id);
         } else {
@@ -477,59 +542,90 @@ namespace scripting {
       }
       const std::string newRev = plugin_git::remoteHead(repoRoot).out;
       const std::string curRev = plugin_git::headRevision(repoRoot).out;
-      if (newRev.empty() || newRev == curRev) {
-        DeferredCall::callLater([sourceName]() { kLog.info("source '{}' already up to date", sourceName); });
+      if (newRev.empty()) {
+        DeferredCall::callLater([sourceName]() { kLog.warn("update '{}': fetched revision is empty", sourceName); });
         return;
       }
+      const bool sourceRevisionChanged = newRev != curRev;
 
-      // Compatibility guard BEFORE applying: read the *new* catalog at the fetched
-      // revision (no working-tree change) and check every enabled plugin's
-      // min_noctalia. If one would require a newer Noctalia, skip the update — nothing
-      // is applied, so there is nothing to undo.
-      if (const auto catalog = plugin_git::showFile(repoRoot, "catalog.toml", newRev); catalog) {
-        for (const auto& entry : parseCatalogToml(catalog.out)) {
-          if (enabled.contains(entry.id)
-              && !entry.minNoctalia.empty()
-              && !noctalia::version::atLeast(noctalia::build_info::version(), entry.minNoctalia)) {
-            DeferredCall::callLater([sourceName, id = entry.id, min = entry.minNoctalia]() {
-              kLog.warn(
-                  "update '{}' withheld: '{}' requires noctalia >= {} (running {})", sourceName, id, min,
-                  noctalia::build_info::version()
-              );
-            });
-            return;
-          }
+      const auto catalog = readGitCatalog(repoRoot, newRev);
+      std::unordered_set<std::string> withheldIds;
+      std::vector<std::pair<std::string, std::string>> withheldUpdates;
+      const auto rememberWithheld = [&](std::string id, std::string minNoctalia) {
+        if (withheldIds.insert(id).second) {
+          withheldUpdates.emplace_back(std::move(id), std::move(minNoctalia));
         }
-      }
+      };
 
-      // Apply: export every enabled plugin this source ships at the new revision,
-      // then advance HEAD so catalog/hasPath reads follow. A failed export leaves
-      // HEAD where it is; exported runtime files are re-derivable on the next run.
+      bool materialized = false;
       for (const auto& id : enabled) {
         const auto sub = pluginSubdirFromId(id);
         if (!sub.has_value()) {
           continue;
         }
+        const auto* catalogEntry = findCatalogEntry(catalog, id);
+        if (catalogEntry != nullptr && !catalogEntry->compatible) {
+          rememberWithheld(id, catalogEntry->minNoctalia);
+          continue;
+        }
         if (!plugin_git::hasPath(repoRoot, *sub + "/plugin.toml", newRev)) {
           continue; // not shipped by this source
         }
-        if (const auto m = materializeGitPlugin(source, repoRoot, newRev, id); !m) {
+        if (!sourceRevisionChanged) {
+          std::error_code materializedEc;
+          const bool hasMaterialized =
+              std::filesystem::exists(materializedPluginDir(source, id) / "plugin.toml", materializedEc);
+          if (catalogEntry == nullptr && hasMaterialized) {
+            continue;
+          }
+          if (catalogEntry != nullptr && materializedPluginMatchesCatalog(source, id, *catalogEntry)) {
+            continue; // source already points here and the exported copy matches it
+          }
+        }
+        if (const auto m = materializeGitPlugin(source, repoRoot, newRev, id, true); !m) {
+          if (m.incompatible) {
+            rememberWithheld(id, m.requiredNoctalia);
+            continue;
+          }
           DeferredCall::callLater([sourceName, id, err = m.error]() {
             kLog.warn("update '{}': export '{}' failed: {}", sourceName, id, err);
           });
           return;
         }
+        materialized = true;
       }
-      const auto applied = plugin_git::setHead(repoRoot, newRev);
-      DeferredCall::callLater([this, sourceName, ok = static_cast<bool>(applied), err = applied.err, newRev]() {
+      bool applied = true;
+      std::string applyError;
+      if (sourceRevisionChanged) {
+        const auto result = plugin_git::setHead(repoRoot, newRev);
+        applied = static_cast<bool>(result);
+        applyError = result.err;
+      }
+      DeferredCall::callLater([this, sourceName, ok = applied, err = std::move(applyError), newRev,
+                               sourceRevisionChanged, materialized,
+                               withheldUpdates = std::move(withheldUpdates)]() mutable {
         if (!ok) {
           kLog.warn("update '{}': set HEAD failed: {}", sourceName, err);
           return;
         }
-        kLog.info("updated source '{}' -> {}", sourceName, newRev);
-        PluginRegistry::instance().scan(); // re-parse manifests; live .luau changes hot-reload via file watch
-        if (m_onChanged) {
-          m_onChanged(); // rebuild bar + reconcile services for the new revision
+        for (const auto& [id, min] : withheldUpdates) {
+          kLog.warn(
+              "update '{}': kept previous '{}' export; new version requires noctalia >= {} (running {})", sourceName,
+              id, min, noctalia::build_info::version()
+          );
+        }
+        if (sourceRevisionChanged) {
+          kLog.info("updated source '{}' -> {}", sourceName, newRev);
+        } else if (materialized) {
+          kLog.info("reconciled source '{}' at {}", sourceName, newRev);
+        } else {
+          kLog.info("source '{}' already up to date", sourceName);
+        }
+        if (sourceRevisionChanged || materialized) {
+          PluginRegistry::instance().scan(); // re-parse manifests; live .luau changes hot-reload via file watch
+          if (m_onChanged) {
+            m_onChanged(); // rebuild bar + reconcile services for the new revision
+          }
         }
       });
     }).detach();

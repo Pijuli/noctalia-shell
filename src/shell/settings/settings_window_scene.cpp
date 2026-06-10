@@ -13,6 +13,7 @@
 #include "shell/settings/settings_control_factory.h"
 #include "shell/settings/settings_sidebar.h"
 #include "shell/settings/settings_window.h"
+#include "shell/tooltip/tooltip_manager.h"
 #include "system/battery_warning_monitor.h"
 #include "system/dependency_service.h"
 #include "theme/community_palettes.h"
@@ -519,6 +520,14 @@ void SettingsWindow::rebuildSettingsContent() {
                   } else {
                     m_pluginManager->disable(id);
                   }
+                  markPluginListDirty();
+                  requestSceneRebuild();
+                },
+            .addSource = [this]() { openPluginSourceCreateEditor(); },
+            .setSourceAutoUpdate =
+                [this](PluginSourceConfig source, bool autoUpdate) {
+                  source.autoUpdate = autoUpdate;
+                  m_pluginManager->addSource(source);
                   markPluginListDirty();
                   requestSceneRebuild();
                 },
@@ -1115,10 +1124,19 @@ void SettingsWindow::buildScene(std::uint32_t width, std::uint32_t height) {
   applyPendingContentScrollTarget(Style::spaceMd * scale);
   m_mainContainer = static_cast<Flex*>(m_sceneRoot->addChild(std::move(main)));
 
-  m_inputDispatcher.setSceneRoot(m_sceneRoot.get());
   m_inputDispatcher.setTextInputContext(m_surface->wlSurface(), m_wayland->textInputService());
   m_inputDispatcher.setCursorShapeCallback([this](std::uint32_t serial, std::uint32_t shape) {
     m_wayland->setCursorShape(serial, shape);
   });
+  m_inputDispatcher.setHoverChangeCallback([this](InputArea* /*old*/, InputArea* next) {
+    if (m_surface != nullptr) {
+      wl_output* output = m_output;
+      if (output == nullptr && m_wayland != nullptr) {
+        output = m_wayland->outputForSurface(m_surface->wlSurface());
+      }
+      TooltipManager::instance().onHoverChange(next, m_surface->xdgSurface(), output);
+    }
+  });
+  m_inputDispatcher.setSceneRoot(m_sceneRoot.get());
   m_surface->setSceneRoot(m_sceneRoot.get());
 }

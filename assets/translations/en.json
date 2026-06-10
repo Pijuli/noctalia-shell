@@ -832,6 +832,43 @@
         "idle-for-seconds": "Idle for {seconds} seconds"
       }
     },
+    "plugins": {
+      "plugins": {
+        "configure": "Configure",
+        "empty": "No plugins found. Add a source, or check your network.",
+        "loading": "Loading plugins...",
+        "refreshing": "Refreshing plugins...",
+        "requires-newer-noctalia": "requires newer Noctalia",
+        "title": "Plugins"
+      },
+      "settings": {
+        "empty": "No settings available."
+      },
+      "sources": {
+        "add": "Add source",
+        "add-title": "Add plugin source",
+        "empty": "No sources configured.",
+        "errors": {
+          "duplicate-name": "A source with this name already exists.",
+          "invalid-name": "Source name must use letters, digits, '.', '_' or '-', starting with a letter or digit.",
+          "location-required": "Source location is required."
+        },
+        "kind": {
+          "git": "Git",
+          "path": "Path"
+        },
+        "kind-label": "Kind",
+        "location-label": "Location",
+        "location-placeholder-git": "https://github.com/me/noctalia-plugins",
+        "location-placeholder-path": "~/dev/noctalia-plugins",
+        "name-label": "Name",
+        "name-placeholder": "my-plugins",
+        "remove": "Remove source",
+        "title": "Sources",
+        "update": "Update",
+        "update-on-startup": "Update on startup"
+      }
+    },
     "navigation": {
       "groups": {
         "audio": "Audio",

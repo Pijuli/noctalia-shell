@@ -72,10 +72,11 @@ namespace scripting {
     // Add (or replace) a source and refresh.
     void addSource(const PluginSourceConfig& source);
 
-    // Fetch a git source off-thread, check the new catalog's min_noctalia for every
-    // enabled plugin, and apply only if all are compatible — otherwise the update is
-    // skipped (nothing is applied). Re-scans on the main thread. No-op for path /
-    // unknown sources.
+    // Fetch a git source off-thread, export compatible enabled plugins, keep
+    // incompatible enabled plugins on their previous exported copy, then advance
+    // the source catalog. If the fetched revision is already current, reconcile
+    // any held exports that are now compatible. Re-scans on the main thread. No-op
+    // for path / unknown sources.
     void update(std::string sourceName);
 
     // Remove a source: delete its git repo cache and exported runtime files, disable

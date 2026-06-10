@@ -41,16 +41,35 @@ namespace settings {
 
       auto info = ui::column({.align = FlexAlign::Start, .gap = 2.0F * scale, .flexGrow = 1.0F});
       info->addChild(makeLabel(source.name, Style::fontSizeBody * scale, ColorRole::OnSurface, FontWeight::Medium));
-      const std::string kind = source.kind == PluginSourceKind::Git ? "git" : "path";
+      const std::string kind = source.kind == PluginSourceKind::Git ? i18n::tr("settings.plugins.sources.kind.git")
+                                                                    : i18n::tr("settings.plugins.sources.kind.path");
       info->addChild(
           makeLabel(kind + " · " + source.location, Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant)
       );
       r->addChild(std::move(info));
 
       if (source.kind == PluginSourceKind::Git) {
+        auto autoUpdate = ui::row({.align = FlexAlign::Center, .gap = Style::spaceXs * scale});
+        autoUpdate->addChild(makeLabel(
+            i18n::tr("settings.plugins.sources.update-on-startup"), Style::fontSizeCaption * scale,
+            ColorRole::OnSurfaceVariant, FontWeight::Medium
+        ));
+        autoUpdate->addChild(
+            ui::toggle({
+                .checked = source.autoUpdate,
+                .toggleSize = ToggleSize::Small,
+                .scale = scale,
+                .onChange = [cb = ctx.setSourceAutoUpdate, source](bool on) {
+                  if (cb) {
+                    cb(source, on);
+                  }
+                },
+            })
+        );
+        r->addChild(std::move(autoUpdate));
         r->addChild(
             ui::button({
-                .text = "Update",
+                .text = i18n::tr("settings.plugins.sources.update"),
                 .fontSize = Style::fontSizeCaption * scale,
                 .variant = ButtonVariant::Outline,
                 .onClick = [cb = ctx.updateSource, name = source.name]() {
@@ -67,7 +86,7 @@ namespace settings {
                 .glyph = "trash",
                 .glyphSize = Style::fontSizeBody * scale,
                 .variant = ButtonVariant::Ghost,
-                .tooltip = "Remove source",
+                .tooltip = i18n::tr("settings.plugins.sources.remove"),
                 .onClick = [cb = ctx.removeSource, name = source.name]() {
                   if (cb) {
                     cb(name);
@@ -93,9 +112,10 @@ namespace settings {
       auto title = ui::row({.align = FlexAlign::Center, .gap = Style::spaceXs * scale});
       title->addChild(makeLabel(plugin.id, Style::fontSizeBody * scale, ColorRole::OnSurface, FontWeight::Medium));
       if (!plugin.compatible) {
-        title->addChild(
-            makeLabel("requires newer noctalia", Style::fontSizeMini * scale, ColorRole::Error, FontWeight::Bold)
-        );
+        title->addChild(makeLabel(
+            i18n::tr("settings.plugins.plugins.requires-newer-noctalia"), Style::fontSizeMini * scale, ColorRole::Error,
+            FontWeight::Bold
+        ));
       }
       info->addChild(std::move(title));
       const std::string version = plugin.version.empty() ? std::string("?") : plugin.version;
@@ -111,7 +131,7 @@ namespace settings {
                 .glyph = "settings",
                 .glyphSize = Style::fontSizeBody * scale,
                 .variant = ButtonVariant::Ghost,
-                .tooltip = "Configure",
+                .tooltip = i18n::tr("settings.plugins.plugins.configure"),
                 .onClick = [cb = ctx.onConfigure, id = plugin.id]() {
                   if (cb) {
                     cb(id);
@@ -124,7 +144,7 @@ namespace settings {
       r->addChild(
           ui::toggle({
               .checked = enabled,
-              .enabled = plugin.compatible,
+              .enabled = enabled || plugin.compatible,
               .scale = scale,
               .onChange = [cb = ctx.setEnabled, id = plugin.id](bool on) {
                 if (cb) {
@@ -313,7 +333,9 @@ namespace settings {
       rendered = true;
     }
     if (!rendered) {
-      body.addChild(makeLabel("No settings available.", Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant));
+      body.addChild(makeLabel(
+          i18n::tr("settings.plugins.settings.empty"), Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant
+      ));
     }
   }
 
@@ -349,11 +371,30 @@ namespace settings {
     );
 
     // ── Sources ──────────────────────────────────────────────────────────
-    section->addChild(makeLabel("Sources", Style::fontSizeBody * scale, ColorRole::Secondary, FontWeight::Bold));
+    auto sourcesHeader = ui::row({.align = FlexAlign::Center, .gap = Style::spaceSm * scale, .fillWidth = true});
+    sourcesHeader->addChild(makeLabel(
+        i18n::tr("settings.plugins.sources.title"), Style::fontSizeBody * scale, ColorRole::Secondary, FontWeight::Bold
+    ));
+    sourcesHeader->addChild(ui::spacer());
+    sourcesHeader->addChild(
+        ui::button({
+            .text = i18n::tr("settings.plugins.sources.add"),
+            .glyph = "add",
+            .fontSize = Style::fontSizeCaption * scale,
+            .glyphSize = Style::fontSizeBody * scale,
+            .variant = ButtonVariant::Outline,
+            .onClick = [cb = ctx.addSource]() {
+              if (cb) {
+                cb();
+              }
+            },
+        })
+    );
+    section->addChild(std::move(sourcesHeader));
     if (ctx.sources.empty()) {
-      section->addChild(
-          makeLabel("No sources configured.", Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant)
-      );
+      section->addChild(makeLabel(
+          i18n::tr("settings.plugins.sources.empty"), Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant
+      ));
     }
     for (const auto& source : ctx.sources) {
       section->addChild(sourceRow(source, ctx, scale));
@@ -362,16 +403,18 @@ namespace settings {
     section->addChild(ui::separator());
 
     // ── Plugins ──────────────────────────────────────────────────────────
-    section->addChild(makeLabel("Plugins", Style::fontSizeBody * scale, ColorRole::Secondary, FontWeight::Bold));
+    section->addChild(makeLabel(
+        i18n::tr("settings.plugins.plugins.title"), Style::fontSizeBody * scale, ColorRole::Secondary, FontWeight::Bold
+    ));
     if (ctx.pluginsLoading) {
       section->addChild(makeLabel(
-          ctx.plugins.empty() ? "Loading plugins..." : "Refreshing plugins...", Style::fontSizeCaption * scale,
-          ColorRole::OnSurfaceVariant
+          ctx.plugins.empty() ? i18n::tr("settings.plugins.plugins.loading")
+                              : i18n::tr("settings.plugins.plugins.refreshing"),
+          Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant
       ));
     } else if (ctx.plugins.empty()) {
       section->addChild(makeLabel(
-          "No plugins found. Add a source, or check your network.", Style::fontSizeCaption * scale,
-          ColorRole::OnSurfaceVariant
+          i18n::tr("settings.plugins.plugins.empty"), Style::fontSizeCaption * scale, ColorRole::OnSurfaceVariant
       ));
     }
     for (const auto& plugin : ctx.plugins) {
