@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/config_limits.h"
 #include "core/key_chord.h"
 #include "system/sysmon_threshold_profile.h"
 #include "ui/palette.h"
@@ -797,7 +798,7 @@ struct ShellConfig {
   /// When false, disables Wayland clipboard integration (history panel, data-control binding, Input paste/copy hooks).
   bool clipboardEnabled = true;
   /// Maximum unpinned clipboard history entries retained (pinned entries are exempt).
-  int clipboardHistoryMaxEntries = 50;
+  int clipboardHistoryMaxEntries = static_cast<int>(noctalia::config::kClipboardHistoryDefaultEntries);
   /// When true, clearing clipboard history or deleting unpinned entries from the panel asks for confirmation first.
   bool clipboardConfirmClearHistory = true;
   /// Disables per-app tracking and Control Center usage UI.

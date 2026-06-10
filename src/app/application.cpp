@@ -365,8 +365,9 @@ void Application::syncClipboardService() {
   m_wayland.setClipboardService(&m_clipboardService);
   Input::setTextClipboard(&m_clipboardService);
   m_clipboardService.setHistoryRetentionEnabled(enabled);
-  const int maxEntries = m_configService.config().shell.clipboardHistoryMaxEntries;
-  m_clipboardService.setMaxHistoryEntries(static_cast<std::size_t>(std::clamp(maxEntries, 10, 200)));
+  m_clipboardService.setMaxHistoryEntries(
+      static_cast<std::size_t>(m_configService.config().shell.clipboardHistoryMaxEntries)
+  );
 
   if (!enabled) {
     if (m_panelManager.isOpenPanel("clipboard")) {

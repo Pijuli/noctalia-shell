@@ -427,6 +427,17 @@ location = "https://example.invalid/bad"
         fail("osd.scale clamp: expected 0.5");
       }
     }
+    // Clipboard history count accepts large text-heavy histories but still has
+    // an explicit config ceiling.
+    {
+      auto t = toml::parse("clipboard_history_max_entries = 25000");
+      ShellConfig s{};
+      Diagnostics d;
+      readInto(t, s, shellSchema(), "shell", d);
+      if (s.clipboardHistoryMaxEntries != 10000) {
+        fail("shell.clipboard_history_max_entries clamp: expected 10000");
+      }
+    }
   }
 
 } // namespace

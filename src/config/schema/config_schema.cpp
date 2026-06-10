@@ -1110,7 +1110,9 @@ namespace noctalia::config::schema {
         colorSpecField(&ShellConfig::appIconColor, "app_icon_color", /*alwaysEmit=*/false),
         field(&ShellConfig::launchAppsAsSystemdServices, "launch_apps_as_systemd_services"),
         field(&ShellConfig::clipboardEnabled, "clipboard_enabled"),
-        field(&ShellConfig::clipboardHistoryMaxEntries, "clipboard_history_max_entries", Range<std::int64_t>{10, 200}),
+        field(
+            &ShellConfig::clipboardHistoryMaxEntries, "clipboard_history_max_entries", kClipboardHistoryMaxEntriesRange
+        ),
         field(&ShellConfig::clipboardConfirmClearHistory, "clipboard_confirm_clear_history"),
         field(&ShellConfig::screenTimeEnabled, "screen_time_enabled"),
         field(&ShellConfig::sharedGlContext, "shared_gl_context"),
