@@ -45,12 +45,7 @@
         "error": "Wetterfehler",
         "loading": "Wetter...",
         "no-location": "Kein Standort",
-        "off": "Wetter aus",
-        "vertical-default": "W\\nX",
-        "vertical-error": "E R R",
-        "vertical-loading": ".",
-        "vertical-no-location": "N O L O C",
-        "vertical-off": "AUS"
+        "off": "Wetter aus"
       }
     }
   },
@@ -168,7 +163,7 @@
       },
       "select-avatar": "Avatar auswählen",
       "unknown": "unbekannt",
-      "user-facts": "{user}@{host}Betriebszeit - {uptime}Noctalia {version}",
+      "uptime": "Betriebszeit - {uptime}",
       "weather": {
         "configure-location": "Füge [weather].address hinzu oder aktiviere auto_locate.",
         "data-unavailable": "Wetterdaten nicht verfügbar.",
@@ -908,6 +903,7 @@
         "notifications": "Benachrichtigungen",
         "osd": "OSD",
         "panels": "Panels",
+        "plugins": "Plugins",
         "popups": "Popups",
         "power": "Energie",
         "security": "Sicherheit",
@@ -1239,7 +1235,7 @@
           "description": "Fenster vom Leistenrand wegschieben"
         },
         "shadow": {
-          "description": "Den globalen Oberflächenschatten von der Bar werfen"
+          "description": "Den globalen Oberflächenschatten von der Leiste werfen"
         },
         "start-widgets": {
           "description": "Widgets am Anfang (links/oben) der Leiste",
@@ -2664,7 +2660,7 @@
         "volume": "Lautstärke",
         "wallpaper": "Hintergrundbild",
         "weather": "Wetter",
-        "workspaces": "Virtuelle Desktops"
+        "workspaces": "Arbeitsflächen"
       }
     },
     "window": {

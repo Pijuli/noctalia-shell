@@ -3,10 +3,12 @@
 #include "core/deferred_call.h"
 #include "i18n/i18n.h"
 #include "render/render_context.h"
+#include "scripting/plugin_registry.h"
 #include "shell/settings/bar_widget_editor.h"
 #include "shell/settings/color_spec_picker.h"
 #include "shell/settings/settings_content.h"
 #include "shell/settings/settings_content_common.h"
+#include "shell/settings/settings_content_plugins.h"
 #include "shell/settings/settings_control_factory.h"
 #include "shell/settings/settings_window.h"
 #include "shell/settings/widget_settings_registry.h"
@@ -1200,6 +1202,39 @@ void SettingsWindow::openCapsuleGroupEditor(std::vector<std::string> laneListPat
       }
       auto ctx = settings::makeBarWidgetEditorContext(*m_editorSheetFactory);
       settings::buildCapsuleGroupBody(body, m_editorSheetListPath, ctx);
+    });
+  });
+}
+
+void SettingsWindow::openPluginSettingsEditor(std::string pluginId) {
+  DeferredCall::callLater([this, pluginId = std::move(pluginId)]() mutable {
+    if (m_config == nullptr) {
+      return;
+    }
+    const auto* manifest = scripting::PluginRegistry::instance().findManifest(pluginId);
+    if (manifest == nullptr || manifest->settings.empty()) {
+      return;
+    }
+
+    m_editingWidgetName.clear();
+    m_editingCapsuleGroupId.clear();
+    m_renamingWidgetName.clear();
+    m_pendingDeleteWidgetName.clear();
+    m_pendingDeleteWidgetSettingPath.clear();
+    m_editorSheetListPath.clear();
+
+    const std::string title = manifest->name.empty() ? pluginId : manifest->name;
+    openBarWidgetEditorSheet(title, [this, pluginId](Flex& body) {
+      if (m_config == nullptr || m_editorSheetFactory == nullptr) {
+        return;
+      }
+      const auto* currentManifest = scripting::PluginRegistry::instance().findManifest(pluginId);
+      if (currentManifest == nullptr) {
+        return;
+      }
+      settings::buildPluginSettingsEditor(
+          body, m_config->config(), *m_editorSheetFactory, pluginId, *currentManifest, m_showAdvanced, uiScale()
+      );
     });
   });
 }

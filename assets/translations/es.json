@@ -45,9 +45,7 @@
         "error": "Error de Pronóstico",
         "loading": "Pronóstico...",
         "no-location": "Sin ubicación",
-        "off": "Pronóstico apagado",
-        "vertical-error": "ERR",
-        "vertical-loading": "..."
+        "off": "Pronóstico apagado"
       }
     }
   },
@@ -488,7 +486,7 @@
       "groups": {
         "clipboard": "Portapapeles",
         "launcher": "Launcher",
-        "osd": "Visualizacion en pantalla",
+        "osd": "OSD",
         "session-panel": "Sesión",
         "wallpaper": "Fondo de Pantalla",
         "weather": "Pronóstico"
@@ -496,7 +494,7 @@
       "sections": {
         "bar": "Barra",
         "dock": "Dock",
-        "osd": "Visualizacion en pantalla",
+        "osd": "OSD",
         "wallpaper": "Fondo de Pantalla"
       }
     },
@@ -519,6 +517,9 @@
         "end": "Fin",
         "none": "Ninguno",
         "start": "Inicio"
+      },
+      "layer": {
+        "overlay": "Overlay"
       },
       "theme": {
         "source": {
@@ -671,6 +672,9 @@
       }
     },
     "widgets": {
+      "options": {
+        "gauge": "Gauge"
+      },
       "types": {
         "battery": "Batería",
         "bluetooth": "Bluetooth",
@@ -683,6 +687,7 @@
         "session": "Sesión",
         "settings": "Ajustes",
         "taskbar": "Barra de tareas",
+        "tray": "Tray",
         "volume": "Volumen",
         "wallpaper": "Fondo de pantalla",
         "weather": "Pronóstico",

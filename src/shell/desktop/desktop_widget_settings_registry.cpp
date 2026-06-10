@@ -86,6 +86,17 @@ namespace desktop_settings {
   const std::vector<DesktopWidgetTypeSpec>& desktopWidgetTypeSpecs() { return kDesktopWidgetTypeSpecs; }
 
   std::vector<WidgetSettingSpec> commonDesktopWidgetSettingSpecs(std::string_view type) {
+    if (type == "login_box") {
+      auto bgColor = colorSpec("background_color", "surface_variant");
+      auto bgRadius = doubleSpec("background_radius", 12.0, 0.0, 32.0, 1.0);
+      auto bgOpacity = doubleSpec("background_opacity", 0.88, 0.0, 1.0, 0.01);
+      return {
+          std::move(bgColor),
+          std::move(bgOpacity),
+          std::move(bgRadius),
+      };
+    }
+
     const WidgetSettingVisibility backgroundOn{"background", {"true"}};
     const bool backgroundDefault = type != "fancy_audio_visualizer";
 
@@ -217,6 +228,10 @@ namespace desktop_settings {
       add(fontFamilySpec());
       add(boolSpec("show_label", true));
       add(boolSpec("shadow", true));
+    } else if (type == "login_box") {
+      add(boolSpec("show_login_button", true));
+      add(doubleSpec("input_opacity", 1.0, 0.0, 1.0, 0.01));
+      add(doubleSpec("input_radius", 6.0, 0.0, 32.0, 1.0));
     }
 
     return specs;
@@ -231,6 +246,25 @@ namespace desktop_settings {
       out.push_back(spec.schema);
     }
     return out;
+  }
+
+  void applyDesktopWidgetDefaultSettings(
+      std::unordered_map<std::string, WidgetSettingValue>& settings, std::string_view type,
+      DesktopWidgetSettingsScope scope
+  ) {
+    const std::vector<WidgetSettingSpec> specs = scope == DesktopWidgetSettingsScope::Widget
+        ? desktopWidgetSettingSpecs(type)
+        : commonDesktopWidgetSettingSpecs(type);
+    for (const auto& spec : specs) {
+      settings.insert_or_assign(spec.schema.key, spec.schema.defaultValue);
+    }
+  }
+
+  void applyAllDesktopWidgetDefaultSettings(
+      std::unordered_map<std::string, WidgetSettingValue>& settings, std::string_view type
+  ) {
+    applyDesktopWidgetDefaultSettings(settings, type, DesktopWidgetSettingsScope::Widget);
+    applyDesktopWidgetDefaultSettings(settings, type, DesktopWidgetSettingsScope::Background);
   }
 
 } // namespace desktop_settings

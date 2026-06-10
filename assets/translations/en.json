@@ -45,12 +45,7 @@
         "error": "Weather err",
         "loading": "Weather...",
         "no-location": "No location",
-        "off": "Weather off",
-        "vertical-default": "W\nX",
-        "vertical-error": "E\nR\nR",
-        "vertical-loading": ".\n.\n.",
-        "vertical-no-location": "N\nO\nL\nO\nC",
-        "vertical-off": "O\nF\nF"
+        "off": "Weather off"
       }
     }
   },
@@ -168,7 +163,7 @@
       },
       "select-avatar": "Select Avatar",
       "unknown": "unknown",
-      "user-facts": "{user}@{host}\nUptime - {uptime}\nNoctalia {version}",
+      "uptime": "Uptime - {uptime}",
       "weather": {
         "configure-location": "Add [weather].address or enable auto_locate.",
         "data-unavailable": "Weather data unavailable.",
@@ -347,13 +342,17 @@
         "low-color": "Low Color",
         "mirrored": "Mirrored",
         "opacity": "Opacity",
+        "input-opacity": "Input Opacity",
+        "input-radius": "Input Radius",
         "primary-color": "Primary Color",
         "ring-opacity": "Ring Opacity",
+        "reset-defaults": "Reset to Defaults",
         "rotation-speed": "Rotation Speed",
         "secondary-color": "Secondary Color",
         "sensitivity": "Sensitivity",
         "shadow": "Shadow",
         "show-label": "Show Label",
+        "show-login-button": "Login Button",
         "show-when-idle": "Show When Idle",
         "stat": "Stat",
         "stat-cpu-temp": "CPU Temp",
@@ -908,6 +907,7 @@
         "notifications": "Notifications",
         "osd": "OSD",
         "panels": "Panels",
+        "plugins": "Plugins",
         "popups": "Popups",
         "power": "Power",
         "security": "Security",
@@ -1601,7 +1601,7 @@
           "label": "Borders"
         },
         "control-center-sidebar": {
-          "description": "On Home and general opens",
+          "description": "Choose how to display the sidebar",
           "label": "Sidebar"
         },
         "control-center-sidebar-section": {

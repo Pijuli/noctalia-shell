@@ -84,9 +84,13 @@ bool LockScreen::lock() {
     return true;
   }
 
-  m_desktopCaptures.clear();
-  if (shouldUseBlurredDesktop()) {
-    captureDesktopSnapshots();
+  if (m_desktopCapturesPrimed) {
+    m_desktopCapturesPrimed = false;
+  } else {
+    m_desktopCaptures.clear();
+    if (shouldUseBlurredDesktop()) {
+      captureDesktopSnapshots();
+    }
   }
 
   m_lock = ext_session_lock_manager_v1_lock(m_wayland->sessionLockManager());
@@ -148,6 +152,7 @@ void LockScreen::unlock() {
   m_statusIsError = false;
   m_wayland->stopKeyRepeat();
   m_desktopCaptures.clear();
+  m_desktopCapturesPrimed = false;
 
   // Tear down widgets while lock surfaces still exist. Session hooks run only after
   // isActive() is false so LockscreenWidgetsController::applyVisibility() hides first.
@@ -371,6 +376,7 @@ void LockScreen::handleFinished(void* data, ext_session_lock_v1* /*lock*/) {
   self->m_status.clear();
   self->m_statusIsError = false;
   self->m_desktopCaptures.clear();
+  self->m_desktopCapturesPrimed = false;
   if (self->m_onSessionUnlocked) {
     self->m_onSessionUnlocked();
   }
@@ -412,6 +418,27 @@ bool LockScreen::shouldUseBlurredDesktop() const {
       && m_configService->config().lockscreen.blurredDesktop
       && m_wayland != nullptr
       && m_wayland->hasScreencopy();
+}
+
+void LockScreen::primeDesktopCaptures() {
+  if (isActive()) {
+    return;
+  }
+  m_desktopCaptures.clear();
+  m_desktopCapturesPrimed = false;
+  if (!shouldUseBlurredDesktop()) {
+    return;
+  }
+  captureDesktopSnapshots();
+  m_desktopCapturesPrimed = true;
+}
+
+void LockScreen::clearPrimedDesktopCaptures() {
+  if (!m_desktopCapturesPrimed) {
+    return;
+  }
+  m_desktopCapturesPrimed = false;
+  m_desktopCaptures.clear();
 }
 
 void LockScreen::captureDesktopSnapshots() {

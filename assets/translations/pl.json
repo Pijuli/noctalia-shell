@@ -45,12 +45,7 @@
         "error": "Błąd pogody",
         "loading": "Pogoda...",
         "no-location": "Brak lokalizacji",
-        "off": "Pogoda wyłączona",
-        "vertical-default": "P\nO",
-        "vertical-error": "B\nŁ\nĘ\nD",
-        "vertical-loading": ".\n.\n.",
-        "vertical-no-location": "B\nL\nO\nK",
-        "vertical-off": "W\nY\nŁ"
+        "off": "Pogoda wyłączona"
       }
     }
   },
@@ -168,7 +163,7 @@
       },
       "select-avatar": "Wybierz awatar",
       "unknown": "nieznane",
-      "user-facts": "{user}@{host}\nCzas działania - {uptime}\nNoctalia {version}",
+      "uptime": "Czas działania - {uptime}",
       "weather": {
         "configure-location": "Dodaj [weather].address lub włącz auto_locate.",
         "data-unavailable": "Dane pogodowe niedostępne.",

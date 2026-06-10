@@ -297,6 +297,7 @@ std::unique_ptr<DesktopWidget> DesktopWidgetFactory::create(
 
   if (type == "login_box") {
     auto widget = std::make_unique<DesktopLoginBoxWidget>();
+    widget->setSettings(settings);
     widget->setContentScale(contentScale);
     return widget;
   }

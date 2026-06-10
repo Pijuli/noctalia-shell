@@ -32,7 +32,7 @@ namespace settings {
 
     constexpr int kBarMarginMax = 4096;
 
-    constexpr std::array<SettingsSectionDescriptor, 17> kSettingsSections{{
+    constexpr std::array<SettingsSectionDescriptor, 18> kSettingsSections{{
         {SettingsSection::Appearance, "appearance", "adjustments-horizontal"},
         {SettingsSection::Wallpaper, "wallpaper", "paint"},
         {SettingsSection::Templates, "templates", "color-swatch"},
@@ -50,6 +50,7 @@ namespace settings {
         {SettingsSection::Hooks, "hooks", "link"},
         {SettingsSection::Niri, "niri", "niri"},
         {SettingsSection::Bar, "bar", "crop-3-2", false},
+        {SettingsSection::Plugins, "plugins", "puzzle", true, true},
     }};
 
     const SettingsSectionDescriptor& descriptorFor(SettingsSection section) {
@@ -1193,10 +1194,10 @@ namespace settings {
           tr("settings.schema.shell.clipboard-history-max-entries.description"),
           {"shell", "clipboard_history_max_entries"},
           StepperSetting{
-              .value = std::clamp(cfg.shell.clipboardHistoryMaxEntries, 10, 200),
-              .minValue = 10,
-              .maxValue = 200,
-              .step = 5
+              .value = cfg.shell.clipboardHistoryMaxEntries,
+              .minValue = static_cast<int>(noctalia::config::schema::kClipboardHistoryMaxEntriesRange.min.value()),
+              .maxValue = static_cast<int>(noctalia::config::schema::kClipboardHistoryMaxEntriesRange.max.value()),
+              .step = static_cast<int>(noctalia::config::schema::kClipboardHistoryMaxEntriesRange.step.value())
           },
           "clipboard history limit entries"
       );

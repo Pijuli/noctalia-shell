@@ -1,10 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +25,11 @@ namespace process {
     operator bool() const { return exitCode == 0 && !timedOut; }
   };
 
+  struct EnvOverride {
+    std::string name;
+    std::optional<std::string> value;
+  };
+
   using OutputCallback = std::function<void(std::string_view chunk)>;
   using ExitCallback = std::function<void(RunResult result)>;
 
@@ -35,6 +42,12 @@ namespace process {
   struct RunOptions {
     std::optional<std::chrono::milliseconds> timeout;
     std::size_t maxOutputBytes = std::numeric_limits<std::size_t>::max();
+    // When set, the run is cancellable: once the flag turns true the child's
+    // process group is terminated and the call returns. Lets a streaming, never-
+    // exiting process (e.g. `evtest`) be stopped on reload/teardown.
+    std::shared_ptr<std::atomic<bool>> cancel;
+    // Child-only environment changes. `nullopt` unsets the variable.
+    std::vector<EnvOverride> env;
   };
 
   [[nodiscard]] bool commandExists(const char* name);
@@ -58,6 +71,7 @@ namespace process {
   [[nodiscard]] bool runAsync(std::initializer_list<const char*> args);
   [[nodiscard]] bool runAsync(std::initializer_list<const char*> args, RunCallbacks callbacks, RunOptions options = {});
   [[nodiscard]] RunResult runSync(const std::vector<std::string>& args);
+  [[nodiscard]] RunResult runSync(const std::vector<std::string>& args, RunOptions options);
   [[nodiscard]] RunResult runSync(std::initializer_list<const char*> args);
   [[nodiscard]] RunResult runSyncWithTimeout(const std::vector<std::string>& args, std::chrono::milliseconds timeout);
   [[nodiscard]] RunResult

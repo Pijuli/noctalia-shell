@@ -319,6 +319,8 @@ void IdleManager::handleIdled(void* data, ext_idle_notification_v1* /*notificati
     const int fadeMs = static_cast<int>(std::lround(static_cast<double>(fadeSec) * 1000.0));
     const auto fade = std::chrono::milliseconds(std::clamp(fadeMs, 1, 600000));
     kLog.info("idle behavior '{}' pre-action fade {}ms", behavior->config.name, fade.count());
+    const IdleActionKind idleKind = resolveIdleBehaviorActions(behavior->config).idleAction.kind;
+    const bool willLockSession = idleKind == IdleActionKind::Lock || idleKind == IdleActionKind::LockAndSuspend;
     self.joinActiveGrace(*behavior);
     const std::uint64_t generation = ++self.m_graceGeneration;
     self.m_graceFallbackTimer.start(fade + std::chrono::milliseconds(250), [&self, generation]() {
@@ -328,7 +330,7 @@ void IdleManager::handleIdled(void* data, ext_idle_notification_v1* /*notificati
       kLog.debug("idle pre-action fade fallback completed");
       self.graceFadeComplete();
     });
-    self.m_onGraceBegin(behavior->config.name, fade, [ptr = &self, generation]() {
+    self.m_onGraceBegin(behavior->config.name, fade, willLockSession, [ptr = &self, generation]() {
       DeferredCall::callLater([ptr, generation]() {
         if (ptr->m_graceGeneration != generation || !ptr->hasActiveGrace()) {
           return;

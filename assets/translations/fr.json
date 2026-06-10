@@ -2,7 +2,8 @@
   "auth": {
     "pam": {
       "authentication-failed": "Échec de la connexion",
-      "start-failed": "Échec du démarrage PAM"
+      "start-failed": "Échec du démarrage PAM",
+      "user-unavailable": "Impossible de résoudre l'utilisateur actuel"
     },
     "polkit": {
       "authenticate": "Connexion",
@@ -22,12 +23,18 @@
     "widgets": {
       "lock-keys": {
         "caps": "Maj",
+        "caps-short": "C",
         "num": "Num",
-        "scroll": "Défilement"
+        "num-short": "N",
+        "scroll": "Défilement",
+        "scroll-short": "S"
       },
       "media": {
         "nothing-playing": "Aucune lecture en cours",
         "playing": "Lecture"
+      },
+      "network": {
+        "wired": "Filaire"
       },
       "scripted": {
         "reload-failed": "Échec du rechargement du script",
@@ -38,10 +45,7 @@
         "error": "Err météo",
         "loading": "Météo...",
         "no-location": "Pas de localisation",
-        "off": "Météo désactivée",
-        "vertical-error": "ERR",
-        "vertical-loading": "...",
-        "vertical-no-location": "SANSLOC"
+        "off": "Météo désactivée"
       }
     }
   },
@@ -272,7 +276,115 @@
       "weather": "Météo"
     },
     "weather": {
-      "configure-location": "Définir [weather].address ou activer la localisation automatique"
+      "configure-location": "Définir [weather].address ou activer la localisation automatique",
+      "data-unavailable": "Données météo indisponibles.",
+      "details": {
+        "elevation": "Élevation",
+        "sunrise": "Lever de Soleil",
+        "sunset": "Coucher de Soleil",
+        "temp-max": "Température Max",
+        "temp-min": "Température Min",
+        "timezone": "Fuseau horaire",
+        "wind": "Vent"
+      },
+      "disabled": "Activer [weather] dans config.toml",
+      "fetching": "Récupération des prévisions...",
+      "forecast-placeholder": {
+        "day": "Dimanche",
+        "description": "Météo",
+        "temperature": "10 / 4 °C"
+      },
+      "location-unavailable": "Localisation indisponible",
+      "refreshing": "Actualisation de la météo...",
+      "waiting": "En attente de données météo"
+    }
+  },
+  "desktop-widgets": {
+    "editor": {
+      "actions": {
+        "done": "Fait"
+      },
+      "dialogs": {
+        "select-sticker-image": "Sélectionner une image de sticker"
+      },
+      "settings": {
+        "aspect-ratio": "Format",
+        "background": "Arrière-plan",
+        "background-color": "Couleur",
+        "background-opacity": "Opacité",
+        "background-padding": "Marges internes",
+        "background-radius": "Rayon",
+        "background-section": "Arrière-plan",
+        "bands": "Bandes",
+        "bar-width": "Épaisseur de la barre",
+        "bloom-intensity": "Halo lumineux",
+        "centered": "Centré",
+        "change-image": "Changer...",
+        "circle": "Cercle",
+        "clock-style": "Style de l'horloge",
+        "clock-style-analog": "Analogique",
+        "clock-style-digital": "Digitale",
+        "color": "Couleur",
+        "color2": "Couleur 2",
+        "custom-color": "Personnalisé...",
+        "description": "Description",
+        "font-family": "Police",
+        "font-family-default": "Valeur système",
+        "format": "Format",
+        "hide-when-no-media": "Masquer en l’absence de média",
+        "high-color": "Couleurs vives",
+        "horizontal": "Horizontal",
+        "image-path": "Image",
+        "inner-diameter": "Diamètre intérieur",
+        "layout": "Disposition",
+        "low-color": "Couleurs atténuées",
+        "mirrored": "Miroir",
+        "opacity": "Opacité",
+        "primary-color": "Couleur principale",
+        "secondary-color": "Couleur secondaire",
+        "sensitivity": "Sensibilité",
+        "shadow": "Ombre",
+        "stat": "Stat",
+        "stat-cpu-temp": "Temp CPU",
+        "stat-cpu-usage": "Util CPU",
+        "stat-gpu-temp": "Temp GPU",
+        "stat-gpu-usage": "Util GPU",
+        "stat-gpu-vram": "VRAM GPU",
+        "stat-net-rx": "Rx net",
+        "stat-net-tx": "Tx net",
+        "stat-none": "Néant",
+        "stat-ram-pct": "RAM %",
+        "stat-swap-pct": "Swap %",
+        "stat2": "Stat 2",
+        "title": "Titre",
+        "vertical": "Vertical",
+        "visualization-mode": "Mode",
+        "visualization-mode-all": "Tout",
+        "widget-section": "Widget"
+      },
+      "types": {
+        "audio-visualizer": "Visualiseur audio",
+        "clock": "Horloge",
+        "label": "Label",
+        "sticker": "Sticker",
+        "system-monitor": "Moniteur système",
+        "weather": "Météo"
+      }
+    },
+    "media": {
+      "nothing-playing": "Aucune lecture en cours"
+    },
+    "weather": {
+      "error": "Erreur",
+      "loading": "Chargement",
+      "no-location": "Pas de localisation",
+      "off": "Météo désactivée"
+    }
+  },
+  "dock": {
+    "actions": {
+      "close": "Fermer",
+      "close-all": "Tout fermer"
     }
   },
   "settings": {

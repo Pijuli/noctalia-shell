@@ -365,8 +365,9 @@ void Application::syncClipboardService() {
   m_wayland.setClipboardService(&m_clipboardService);
   Input::setTextClipboard(&m_clipboardService);
   m_clipboardService.setHistoryRetentionEnabled(enabled);
-  const int maxEntries = m_configService.config().shell.clipboardHistoryMaxEntries;
-  m_clipboardService.setMaxHistoryEntries(static_cast<std::size_t>(std::clamp(maxEntries, 10, 200)));
+  m_clipboardService.setMaxHistoryEntries(
+      static_cast<std::size_t>(m_configService.config().shell.clipboardHistoryMaxEntries)
+  );
 
   if (!enabled) {
     if (m_panelManager.isOpenPanel("clipboard")) {
@@ -385,7 +386,37 @@ void Application::run(std::function<void()> startupReadyCallback) {
   initLogFile();
   kLog.info("noctalia {}", noctalia::build_info::displayVersion());
   runStartupPhase("initServices", [this]() { initServices(); });
+  runStartupPhase("initPlugins", [this]() {
+    // Configure the plugin registry from [plugins] before any UI consumes it, and
+    // re-apply on reload. Registered first so the registry updates ahead of bar /
+    // control-center rebuilds when a plugin is enabled or disabled.
+    m_pluginManager.refresh();
+    m_configService.addReloadCallback([this]() { m_pluginManager.refresh(); });
+    // Opt-in auto-update: pull each flagged git source in the background.
+    for (const auto& source : m_configService.config().plugins.sources) {
+      if (source.kind == PluginSourceKind::Git && source.autoUpdate) {
+        m_pluginManager.update(source.name);
+      }
+    }
+  });
   runStartupPhase("initUi", [this]() { initUi(); });
+  runStartupPhase("initPluginServices", [this]() {
+    m_pluginServiceHost.start(m_configService.config().plugins.pluginSettings);
+    // Reconcile services when plugin settings change (start new, stop removed, re-seed
+    // changed). Guarded by the plugins change flag so unrelated reloads don't churn.
+    m_configService.addReloadCallback([this]() {
+      if (m_configService.lastChange().plugins) {
+        m_pluginServiceHost.refresh(m_configService.config().plugins.pluginSettings);
+      }
+    });
+    // A git update() advances a source without a config change, so it bypasses the
+    // reload path: rebuild the bar and reconcile services for the new revision.
+    m_pluginManager.setOnChanged([this]() {
+      m_pluginServiceHost.refresh(m_configService.config().plugins.pluginSettings);
+      m_bar.refresh();
+      m_settingsWindow.onPluginsChanged();
+    });
+  });
   runStartupPhase("initIpc", [this]() { initIpc(); });
   runStartupPhase("buildPollSources", [this]() { (void)buildPollSources(); });
 
@@ -1114,6 +1145,7 @@ void Application::initUi() {
   m_settingsWindow.initialize(
       m_wayland, &m_configService, &m_renderContext, &m_dependencyService, m_upowerService.get(), &m_idleManager
   );
+  m_settingsWindow.setPluginManager(&m_pluginManager);
   m_settingsWindow.setOpenDesktopWidgetEditor([this]() {
     if (m_lockscreenWidgetsController.isEditing()) {
       m_lockscreenWidgetsController.exitEdit();
@@ -1342,7 +1374,8 @@ void Application::initUi() {
           &m_weatherService, m_pipewireSpectrum.get(), m_upowerService.get(), m_powerProfilesService.get(),
           m_networkService.get(), m_networkSecretAgent.get(), m_bluetoothService.get(), m_bluetoothAgent.get(),
           m_brightnessService.get(), m_systemMonitor.get(), &m_screenTimeService, &m_gammaService, &m_themeService,
-          &m_idleInhibitor, &m_dependencyService, &m_compositorPlatform, &m_ipcService, &m_wallpaper, &m_calendarService
+          &m_idleInhibitor, &m_dependencyService, &m_compositorPlatform, &m_ipcService, &m_wallpaper,
+          &m_calendarService, &m_scriptApi, &m_clipboardService
       )
   );
   {
@@ -1427,15 +1460,26 @@ void Application::initUi() {
   m_wayland.setIdleCapabilitiesReadyCallback([this]() { m_idleManager.reload(m_configService.config().idle); });
   m_idleManager.initialize(
       m_wayland,
-      [this](const std::string& behaviorName, std::chrono::milliseconds fadeIn, std::function<void()> onFadeComplete) {
+      [this](
+          const std::string& behaviorName, std::chrono::milliseconds fadeIn, bool willLockSession,
+          std::function<void()> onFadeComplete
+      ) {
         (void)behaviorName;
+        // Snapshot the clean desktop before the overlay fades in
+        if (willLockSession) {
+          m_lockScreen.primeDesktopCaptures();
+        }
         DeferredCall::callLater([this, fadeIn, done = std::move(onFadeComplete)]() mutable {
           m_idleGraceOverlay.show(fadeIn, std::move(done));
         });
       },
       [this](bool userCancelled) {
-        (void)userCancelled;
-        DeferredCall::callLater([this]() { m_idleGraceOverlay.hide(); });
+        DeferredCall::callLater([this, userCancelled]() {
+          m_idleGraceOverlay.hide();
+          if (userCancelled) {
+            m_lockScreen.clearPrimedDesktopCaptures();
+          }
+        });
       }
   );
   m_idleManager.setActionRunner(
@@ -1814,6 +1858,102 @@ void Application::initIpc() {
       "brightness-osd <value>", "Show brightness OSD without changing brightness"
   );
   m_configService.registerIpc(m_ipcService);
+  scripting::PluginIpcRouter::instance().setPlatform(&m_compositorPlatform);
+  m_ipcService.registerHandler(
+      "plugin",
+      [](const std::string& args) -> std::string { return scripting::PluginIpcRouter::instance().dispatch(args); },
+      "plugin <author/plugin:entry> <target[:bar-name]> <event> [payload]", "Dispatch an event to a plugin entry"
+  );
+  m_ipcService.registerHandler(
+      "plugins",
+      [this](const std::string& args) -> std::string {
+        const auto parts = noctalia::ipc::splitWords(args);
+        if (parts.empty()) {
+          return "error: plugins <list|enable|disable> [author/plugin]\n";
+        }
+        const std::string& cmd = parts[0];
+        if (cmd == "list") {
+          std::string out;
+          for (const auto& s : m_pluginManager.list()) {
+            out += std::format(
+                "{} {} [{}]{}{}\n", s.id, s.version.empty() ? "-" : s.version, s.source, s.enabled ? " enabled" : "",
+                s.compatible ? "" : " incompatible"
+            );
+          }
+          return out.empty() ? "(no plugins)\n" : out;
+        }
+        if (cmd == "enable") {
+          if (parts.size() != 2) {
+            return "error: plugins enable <author/plugin>\n";
+          }
+          const auto res = m_pluginManager.enable(parts[1]);
+          return res.ok ? "ok\n" : ("error: " + res.error + "\n");
+        }
+        if (cmd == "disable") {
+          if (parts.size() != 2) {
+            return "error: plugins disable <author/plugin>\n";
+          }
+          m_pluginManager.disable(parts[1]);
+          return "ok\n";
+        }
+        if (cmd == "update") {
+          if (parts.size() != 2) {
+            return "error: plugins update <source-name>\n";
+          }
+          m_pluginManager.update(parts[1]);
+          return "ok (updating in background)\n";
+        }
+        if (cmd == "source") {
+          if (parts.size() < 2) {
+            return "error: plugins source <list|add|remove> ...\n";
+          }
+          const std::string& sub = parts[1];
+          if (sub == "list") {
+            std::string out;
+            for (const auto& s : m_configService.config().plugins.sources) {
+              out += std::format(
+                  "{} {} {}{}\n", s.name, enumToKey(kPluginSourceKinds, s.kind), s.location, s.autoUpdate ? " auto" : ""
+              );
+            }
+            return out.empty() ? "(no sources)\n" : out;
+          }
+          if (sub == "add") {
+            if (parts.size() < 5) {
+              return "error: plugins source add <name> <git|path> <location> [auto]\n";
+            }
+            const auto kind = enumFromKey(kPluginSourceKinds, parts[3]);
+            if (!kind.has_value()) {
+              return "error: source kind must be 'git' or 'path'\n";
+            }
+            if (!isValidPluginSourceName(parts[2])) {
+              return "error: source name must use letters, digits, '.', '_' or '-', starting with a letter or digit\n";
+            }
+            PluginSourceConfig source{
+                .kind = *kind,
+                .name = parts[2],
+                .location = parts[4],
+                .autoUpdate = parts.size() > 5 && (parts[5] == "auto" || parts[5] == "true"),
+            };
+            m_pluginManager.addSource(source);
+            return "ok\n";
+          }
+          if (sub == "remove") {
+            if (parts.size() != 3) {
+              return "error: plugins source remove <name>\n";
+            }
+            if (isDefaultPluginSourceName(parts[2])) {
+              return "error: built-in plugin sources cannot be removed from IPC\n";
+            }
+            m_pluginManager.removeSource(parts[2]);
+            return "ok\n";
+          }
+          return "error: unknown plugins source subcommand '" + sub + "'\n";
+        }
+        return "error: unknown plugins subcommand '" + cmd + "'\n";
+      },
+      "plugins <list|enable|disable|update|source> ...",
+      "Manage plugins and sources (list/enable/disable/update, source list/add/remove)"
+  );
   m_bar.registerIpc(m_ipcService);
   m_desktopWidgetsController.registerIpc(m_ipcService);
   m_lockscreenWidgetsController.registerIpc(m_ipcService);

@@ -25,6 +25,10 @@ class InputArea;
 class Label;
 class Shortcut;
 class Wallpaper;
+class ClipboardService;
+namespace scripting {
+  class ScriptApiContext;
+}
 
 struct ShortcutPad {
   std::unique_ptr<Shortcut> shortcut;
@@ -40,7 +44,8 @@ public:
       PowerProfilesService* powerProfiles, ConfigService* config, INetworkService* network, BluetoothService* bluetooth,
       GammaService* nightLight, noctalia::theme::ThemeService* theme, NotificationManager* notifications,
       IdleInhibitor* idleInhibitor, DependencyService* dependencies, CompositorPlatform* platform, IpcService* ipc,
-      Wallpaper* wallpaper = nullptr
+      Wallpaper* wallpaper = nullptr, scripting::ScriptApiContext* scriptApi = nullptr,
+      ClipboardService* clipboard = nullptr
   );
   ~HomeTab() override;
 
@@ -84,7 +89,9 @@ private:
   Label* m_dateLabel = nullptr;
   Glyph* m_weatherGlyph = nullptr;
   Label* m_weatherLine = nullptr;
-  Label* m_userFacts = nullptr;
+  Label* m_userHost = nullptr;
+  Label* m_userUptime = nullptr;
+  Label* m_userVersion = nullptr;
   Button* m_settingsButton = nullptr;
   Button* m_sessionButton = nullptr;
   Button* m_wallpaperButton = nullptr;

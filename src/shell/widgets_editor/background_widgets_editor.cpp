@@ -925,7 +925,7 @@ void BackgroundWidgetsEditor::rebuildScene(OverlaySurface& surface) {
       }),
       ui::button({
           .glyph = "settings",
-          .enabled = hasSelectedWidget && !selectedIsLoginBox,
+          .enabled = hasSelectedWidget,
           .selected = m_inspectorOpen,
           .variant = ButtonVariant::Outline,
           .onClick =

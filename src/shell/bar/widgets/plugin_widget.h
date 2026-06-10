@@ -1,8 +1,9 @@
 #pragma once
 
-#include "config/config_service.h"
+#include "config/config_types.h"
 #include "core/file_watcher.h"
 #include "core/timer_manager.h"
+#include "scripting/plugin_ipc.h"
 #include "scripting/script_runtime.h"
 #include "shell/bar/widget.h"
 #include "ui/palette.h"
@@ -24,45 +25,46 @@ class InputArea;
 class Label;
 class CompositorPlatform;
 class ClipboardService;
-class MprisService;
+class HttpClient;
 class PipeWireSpectrum;
+class MprisService;
 namespace scripting {
   class ScriptApiContext;
 }
 
-class ScriptedWidget : public Widget {
+// A bar widget backed by a plugin's `[[widget]]` entry. Each instance owns its
+// own Luau runtime (no shared scope). Settings are pre-seeded from the manifest
+// defaults + the instance's configured values.
+class PluginWidget : public Widget, public scripting::PluginIpcEndpoint {
 public:
-  enum class IpcDispatchResult {
-    Handled,
-    MissingHost,
-    MissingCallback,
-    Failed,
-  };
-
-  explicit ScriptedWidget(
-      std::string configName, std::string scriptPath, std::string barName, std::string outputName,
-      scripting::ScriptApiContext& scriptApi, const WidgetConfig* config = nullptr, FileWatcher* fileWatcher = nullptr,
-      CompositorPlatform* platform = nullptr, ClipboardService* clipboard = nullptr,
+  PluginWidget(
+      std::string entryId, std::filesystem::path sourcePath,
+      std::unordered_map<std::string, WidgetSettingValue> settings, std::string barName, std::string outputName,
+      scripting::ScriptApiContext& scriptApi, FileWatcher* fileWatcher = nullptr,
+      CompositorPlatform* platform = nullptr, ClipboardService* clipboard = nullptr, HttpClient* httpClient = nullptr,
       PipeWireSpectrum* audioSpectrum = nullptr, MprisService* mpris = nullptr
   );
-  ~ScriptedWidget() override;
+  ~PluginWidget() override;
 
   void create() override;
 
   void luaSetText(std::string_view text);
   void luaSetGlyph(std::string_view name);
   void luaSetImage(std::string_view path, bool watch, float width, float height);
-  void luaSetTooltip(const scripting::ScriptWidgetTooltipPatch& tooltip);
+  void luaSetTooltip(const scripting::ScriptTooltipPatch& tooltip);
   void luaSetFont(std::string_view familyOrPath);
   void luaSetColor(std::string_view role, std::string_view mode);
   void luaSetGlyphColor(std::string_view role, std::string_view mode);
   void luaSetVisible(bool visible);
   void luaSetUpdateInterval(float ms);
   void setUpdateDeferralCallback(std::function<bool()> callback);
-  [[nodiscard]] IpcDispatchResult dispatchIpcEvent(std::string_view event, std::string_view payload);
   [[nodiscard]] bool isVertical() const { return m_isVertical; }
 
-  [[nodiscard]] const std::unordered_map<std::string, WidgetSettingValue>& settings() const { return m_settings; }
+  // PluginIpcEndpoint
+  [[nodiscard]] std::string_view ipcEntryId() const override { return m_entryId; }
+  [[nodiscard]] std::string_view ipcOutputName() const override { return m_outputName; }
+  [[nodiscard]] std::string_view ipcBarName() const override { return m_barName; }
+  [[nodiscard]] DispatchResult dispatchIpc(std::string_view event, std::string_view payload) override;
 
 private:
   enum class ScriptColorMode {
@@ -83,20 +85,18 @@ private:
   [[nodiscard]] ColorSpec resolveScriptColor(const ScriptColorState& state) const noexcept;
   [[nodiscard]] static ScriptColorMode scriptColorModeFromToken(std::string_view token) noexcept;
   [[nodiscard]] static std::optional<ColorSpec> scriptColorFromToken(std::string_view token) noexcept;
+  [[nodiscard]] std::filesystem::path resolvePluginPath(std::string_view path) const;
 
   void reloadScript();
   void reloadImage();
-  void handleScriptResult(scripting::ScriptWidgetResult result);
-  void applyScriptPatch(const scripting::ScriptWidgetPatch& patch);
-  [[nodiscard]] scripting::ScriptWidgetSnapshot makeScriptSnapshot() const;
+  void handleScriptResult(scripting::ScriptResult result);
+  void applyScriptPatch(const scripting::ScriptPatch& patch);
+  [[nodiscard]] scripting::ScriptSnapshot makeScriptSnapshot() const;
   [[nodiscard]] std::string focusedOutputName() const;
   void syncImage(Renderer& renderer);
   void setupImageWatch();
   void teardownImageWatch();
   void scheduleImageReloadRetry();
-  void setupAudioSpectrum();
-  void teardownAudioSpectrum();
-  void handleAudioSpectrumChanged();
   void setupScriptWatch();
   void teardownScriptWatch();
   void startUpdateTimer();
@@ -107,12 +107,18 @@ private:
   void scheduleDeferredUpdate();
   [[nodiscard]] bool shouldDeferUpdate() const;
 
-  std::string m_scriptPath;
-  std::string m_widgetConfigName;
+  // Audio-reactive widgets (e.g. bongocat): subscribe to the PipeWire spectrum and
+  // forward each frame to the script's onAudioSpectrum(values, state) callback.
+  void setupAudioSpectrum();
+  void teardownAudioSpectrum();
+  void handleAudioSpectrumChanged();
+
+  std::string m_entryId; // "author/plugin:entry"
+  std::filesystem::path m_sourcePath;
+  std::filesystem::path m_pluginDir;
   std::string m_barName;
   std::string m_outputName;
   scripting::ScriptApiContext& m_scriptApi;
-  std::filesystem::path m_resolvedPath;
   std::filesystem::path m_resolvedImagePath;
   std::unordered_map<std::string, WidgetSettingValue> m_settings;
   std::shared_ptr<scripting::ScriptRuntime> m_runtime;
@@ -120,8 +126,12 @@ private:
   FileWatcher* m_fileWatcher = nullptr;
   CompositorPlatform* m_platform = nullptr;
   ClipboardService* m_clipboard = nullptr;
+  HttpClient* m_httpClient = nullptr;
   PipeWireSpectrum* m_audioSpectrum = nullptr;
   MprisService* m_mpris = nullptr;
+  std::uint64_t m_audioSpectrumListenerId = 0;
+  int m_audioSpectrumBands = 16;
+  bool m_audioSpectrumEnabled = false;
   FileWatcher::WatchId m_watchId = 0;
   Timer m_updateTimer;
   Timer m_deferredUpdateTimer;
@@ -140,9 +150,7 @@ private:
   int m_updateIntervalMs = 250;
   std::uint32_t m_timerPhase = 0;
   std::uint64_t m_updateTimerGeneration = 0;
-  std::uint64_t m_audioSpectrumListenerId = 0;
   int m_imageReloadRetries = 0;
-  int m_audioSpectrumBands = 16;
   bool m_dirty = false;
   bool m_updateDeferred = false;
   bool m_isVertical = false;
@@ -150,9 +158,6 @@ private:
   bool m_imageWatch = false;
   bool m_imageDirty = false;
   bool m_imageForceReload = false;
-  bool m_hotReload = false;
-  bool m_sharedScope = false;
-  bool m_audioSpectrumEnabled = false;
   bool m_hasOnIpc = false;
   bool m_hasOnIpcKnown = false;
   bool m_fontConfigDirty = false;

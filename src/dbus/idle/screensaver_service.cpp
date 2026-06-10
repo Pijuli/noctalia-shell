@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <chrono>
 #include <map>
-#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -31,23 +30,6 @@ namespace {
       sdbus::ObjectPath{"/ScreenSaver"},
   };
 
-  [[nodiscard]] std::optional<std::string> querySessionBusNameOwner(std::string_view serviceName) {
-    try {
-      auto connection = sdbus::createSessionBusConnection();
-      auto proxy = sdbus::createProxy(
-          *connection, sdbus::ServiceName{"org.freedesktop.DBus"}, sdbus::ObjectPath{"/org/freedesktop/DBus"}
-      );
-      std::string owner;
-      proxy->callMethod("GetNameOwner")
-          .onInterface("org.freedesktop.DBus")
-          .withArguments(std::string{serviceName})
-          .storeResultsTo(owner);
-      return owner;
-    } catch (const std::exception&) {
-      return std::nullopt;
-    }
-  }
-
 } // namespace
 
 ScreenSaverService::ScreenSaverService(SystemBus* systemBus) {
@@ -55,14 +37,7 @@ ScreenSaverService::ScreenSaverService(SystemBus* systemBus) {
     m_connection = sdbus::createSessionBusConnection(kBusName);
     registerScreenSaver();
   } catch (const sdbus::Error& e) {
-    if (e.getName() == kFileExistsError) {
-      const auto owner = querySessionBusNameOwner(kBusName);
-      if (owner.has_value()) {
-        kLog.warn("could not provide org.freedesktop.ScreenSaver from noctalia (already owned by {})", *owner);
-      } else {
-        kLog.warn("could not provide org.freedesktop.ScreenSaver from noctalia (name already taken)");
-      }
-    } else {
+    if (e.getName() != kFileExistsError) {
       kLog.warn("screensaver D-Bus registration failed: {}", e.what());
     }
     m_connection.reset();

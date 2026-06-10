@@ -55,6 +55,44 @@ std::vector<ShortcutConfig> defaultControlCenterShortcuts() {
   };
 }
 
+std::vector<PluginSourceConfig> defaultPluginSources() {
+  return {
+      {.kind = PluginSourceKind::Git,
+       .name = "official",
+       .location = "https://github.com/noctalia-dev/official-plugins",
+       .autoUpdate = false},
+      {.kind = PluginSourceKind::Git,
+       .name = "community",
+       .location = "https://github.com/noctalia-dev/community-plugins",
+       .autoUpdate = false},
+  };
+}
+
+bool isDefaultPluginSourceName(std::string_view name) {
+  const auto sources = defaultPluginSources();
+  return std::any_of(sources.begin(), sources.end(), [name](const PluginSourceConfig& source) {
+    return source.name == name;
+  });
+}
+
+bool isValidPluginSourceName(std::string_view name) {
+  if (name.empty()) {
+    return false;
+  }
+  const auto first = static_cast<unsigned char>(name.front());
+  if (std::isalnum(first) == 0) {
+    return false;
+  }
+  for (const char ch : name) {
+    const auto c = static_cast<unsigned char>(ch);
+    if (std::isalnum(c) != 0 || ch == '_' || ch == '-' || ch == '.') {
+      continue;
+    }
+    return false;
+  }
+  return name != "." && name != "..";
+}
+
 std::vector<SessionPanelActionConfig> defaultSessionPanelActions() {
   return {
       SessionPanelActionConfig{

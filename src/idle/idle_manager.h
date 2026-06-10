@@ -19,8 +19,11 @@ public:
   /// Runs the resolved idle or resume action for this behavior.
   using ActionRunner = std::function<bool(const IdleBehaviorConfig& behavior, const IdleActionRequest& action)>;
   /// Starts the pre-action fade overlay; call `onFadeComplete` once every output has finished fading.
+  /// `willLockSession` is true when the idle action locks the session, so the caller can capture
+  /// a clean desktop snapshot before the overlay fades in.
   using GraceBeginCallback = std::function<void(
-      const std::string& behaviorName, std::chrono::milliseconds fadeDuration, std::function<void()> onFadeComplete
+      const std::string& behaviorName, std::chrono::milliseconds fadeDuration, bool willLockSession,
+      std::function<void()> onFadeComplete
   )>;
   /// `userCancelled` is true when input resumed during the fade before the idle action ran.
   using GraceEndCallback = std::function<void(bool userCancelled)>;
