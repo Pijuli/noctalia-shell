@@ -3,6 +3,7 @@
 #include "render/render_context.h"
 #include "render/scene/input_area.h"
 #include "shell/desktop/desktop_widget_settings_registry.h"
+#include "shell/lockscreen/lockscreen_login_box.h"
 #include "shell/settings/color_spec_picker.h"
 #include "shell/settings/widget_settings_registry.h"
 #include "shell/widgets_editor/background_widgets_editor.h"

@@ -376,6 +376,7 @@ void LockscreenWidgetsController::normalizeSnapshot() {
   std::unordered_set<std::string> seenIds;
   for (auto& widget : m_snapshot.widgets) {
     if (lockscreen_login_box::isLoginBoxWidget(widget)) {
+      lockscreen_login_box::normalizeSettings(widget.settings);
       seenIds.insert(widget.id);
       continue;
     }
