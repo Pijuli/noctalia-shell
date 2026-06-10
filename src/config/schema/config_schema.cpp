@@ -1674,6 +1674,7 @@ namespace noctalia::config::schema {
         colorField(&BarConfig::widgetCapsuleFill, "capsule_fill"),
         optionalColorField(&BarConfig::widgetCapsuleForeground, "capsule_foreground"),
         optionalColorField(&BarConfig::widgetColor, "color"),
+        optionalColorField(&BarConfig::widgetIconColor, "icon_color"),
         arrayOf<BarConfig, BarCapsuleGroupStyle>(
             &BarConfig::widgetCapsuleGroups, "capsule_group", barCapsuleGroupSchema(),
             [](const BarCapsuleGroupStyle& g) { return !g.id.empty(); }
@@ -1735,6 +1736,7 @@ namespace noctalia::config::schema {
         optionalColorField(&BarMonitorOverride::widgetCapsuleFill, "capsule_fill"),
         optionalColorField(&BarMonitorOverride::widgetCapsuleForeground, "capsule_foreground"),
         optionalColorField(&BarMonitorOverride::widgetColor, "color"),
+        optionalColorField(&BarMonitorOverride::widgetIconColor, "icon_color"),
         optionalDoubleField(&BarMonitorOverride::widgetCapsulePadding, "capsule_padding", kBarCapsulePaddingRangeD),
         optionalDoubleField(&BarMonitorOverride::widgetCapsuleRadius, "capsule_radius", kBarCapsuleRadiusRangeD),
         optionalDoubleField(&BarMonitorOverride::widgetCapsuleOpacity, "capsule_opacity", kBarCapsuleOpacityRangeD),

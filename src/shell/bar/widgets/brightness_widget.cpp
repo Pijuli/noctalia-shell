@@ -137,7 +137,7 @@ void BrightnessWidget::syncState(Renderer& renderer) {
 
   m_glyph->setGlyph(brightnessGlyphName(brightness));
   m_glyph->setGlyphSize(Style::baseGlyphSize * m_contentScale);
-  m_glyph->setColor(widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)));
+  m_glyph->setColor(widgetIconColorOr(colorSpecFromRole(ColorRole::OnSurface)));
   m_glyph->measure(renderer);
 
   m_label->setVisible(m_showLabel);

@@ -490,7 +490,7 @@ void TrayWidget::rebuild(Renderer& renderer) {
       auto glyph = ui::glyph({
           .glyph = m_drawerChevronGlyph,
           .glyphSize = itemSize,
-          .color = widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)),
+          .color = colorSpecFromRole(ColorRole::OnSurface),
       });
       glyph->measure(renderer);
       glyph->setPosition(
@@ -535,7 +535,7 @@ void TrayWidget::rebuild(Renderer& renderer) {
         image->setAppIconColorization(appIconTint);
       }
       bool loadedFromFile = false;
-      const Color symbolicColor = resolveColorSpec(widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)));
+      const Color symbolicColor = resolveColorSpec(colorSpecFromRole(ColorRole::OnSurface));
       if (symbolicPath && isSvgPath(iconPath)) {
         if (auto symbolic = loadSymbolicTrayIcon(iconPath, iconRequestSize, symbolicColor)) {
           loadedFromFile = image->setSourceRaw(
@@ -660,8 +660,7 @@ void TrayWidget::rebuild(Renderer& renderer) {
       auto glyph = ui::glyph({
           .glyph = fallback,
           .glyphSize = iconSize,
-          .color = item.needsAttention ? colorSpecFromRole(ColorRole::Error)
-                                       : widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)),
+          .color = item.needsAttention ? colorSpecFromRole(ColorRole::Error) : colorSpecFromRole(ColorRole::OnSurface),
       });
       glyph->measure(renderer);
       iconW = glyph->width();

@@ -76,6 +76,7 @@ struct BarMonitorOverride {
   std::optional<ColorSpec> widgetCapsuleBorder;
   std::optional<ColorSpec> widgetCapsuleForeground;
   std::optional<ColorSpec> widgetColor;
+  std::optional<ColorSpec> widgetIconColor;
   std::optional<std::vector<BarCapsuleGroupStyle>> widgetCapsuleGroups;
   std::optional<double> widgetCapsulePadding;
   std::optional<double> widgetCapsuleRadius;
@@ -123,9 +124,12 @@ struct BarConfig {
   ColorSpec widgetCapsuleFill = colorSpecFromRole(ColorRole::SurfaceVariant);
   // When set, bar widgets with capsules use this for icon + primary label color unless overridden per widget.
   std::optional<ColorSpec> widgetCapsuleForeground;
-  // Default icon + primary label color for all widgets on this bar (same as per-widget `color`); per-widget `color`
+  // Default primary label color for all widgets on this bar (same as per-widget `color`); per-widget `color`
   // overrides.
   std::optional<ColorSpec> widgetColor;
+  // Default icon color for all widgets on this bar (same as per-widget `color`); per-widget `color`
+  // overrides.
+  std::optional<ColorSpec> widgetIconColor;
   std::vector<BarCapsuleGroupStyle> widgetCapsuleGroups;
   // Inner padding between capsule edge and widget content (logical px), multiplied by widget content scale on the bar.
   float widgetCapsulePadding = Style::barCapsulePadding;

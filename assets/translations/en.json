@@ -1291,8 +1291,12 @@
           "label": "Widget Capsules"
         },
         "widget-color": {
-          "description": "Default icon and label color role for widgets on this bar; fixed hex colors are also supported",
+          "description": "Default label color role for widgets on this bar; fixed hex colors are also supported",
           "label": "Widget Color"
+        },
+        "widget-icon-color": {
+          "description": "Default icon color role for widgets on this bar; fixed hex colors are also supported",
+          "label": "Widget Icon Color"
         },
         "widget-spacing": {
           "description": "Space between bar widgets",
@@ -2330,8 +2334,12 @@
           "label": "Centered"
         },
         "color": {
-          "description": "Color role for widget foreground; fixed hex colors are also supported",
-          "label": "Color"
+          "description": "Color role for widget text; fixed hex colors are also supported",
+          "label": "Text Color"
+        },
+        "icon-color": {
+          "description": "Color role for widget icons; fixed hex colors are also supported",
+          "label": "Icon Color"
         },
         "command": {
           "description": "Shell command run when left-clicking this button",

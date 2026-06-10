@@ -2256,6 +2256,11 @@ namespace settings {
           "color foreground", true
       ));
       entries.push_back(makeEntry(
+          section, "widgets", tr("settings.schema.bar.widget-icon-color.label"),
+          tr("settings.schema.bar.widget-icon-color.description"), path("icon_color"),
+          colorSpecPicker(bar.widgetIconColor, true), "color icon", true
+      ));
+      entries.push_back(makeEntry(
           section, "capsules", tr("settings.schema.bar.widget-capsules.label"),
           tr("settings.schema.bar.widget-capsules.description"), path("capsule"),
           ToggleSetting{bar.widgetCapsuleDefault}, "pill"
@@ -2471,6 +2476,11 @@ namespace settings {
             section, "widgets", tr("settings.schema.bar.widget-color.label"),
             tr("settings.schema.bar.widget-color.description"), monitorPath("color"),
             colorSpecPicker(ovr.widgetColor, true, tr("common.states.inherit")), "color foreground", true
+        ));
+        entries.push_back(makeEntry(
+            section, "widgets", tr("settings.schema.bar.widget-icon-color.label"),
+            tr("settings.schema.bar.widget-icon-color.description"), monitorPath("icon_color"),
+            colorSpecPicker(ovr.widgetIconColor, true, tr("common.states.inherit")), "color icon", true
         ));
         entries.push_back(makeEntry(
             section, "capsules", tr("settings.schema.bar.widget-capsules.label"),

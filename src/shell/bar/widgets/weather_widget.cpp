@@ -26,7 +26,7 @@ void WeatherWidget::create() {
           .out = &m_glyph,
           .glyph = "weather-cloud",
           .glyphSize = Style::baseGlyphSize * m_contentScale,
-          .color = widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)),
+          .color = widgetIconColorOr(colorSpecFromRole(ColorRole::OnSurface)),
       })
   );
 
@@ -50,7 +50,7 @@ void WeatherWidget::doLayout(Renderer& renderer, float containerWidth, float con
   sync(renderer);
 
   m_glyph->setGlyphSize(Style::baseGlyphSize * m_contentScale);
-  m_glyph->setColor(widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)));
+  m_glyph->setColor(widgetIconColorOr(colorSpecFromRole(ColorRole::OnSurface)));
   m_glyph->measure(renderer);
   m_label->setTextAlign(m_isVertical ? TextAlign::Center : TextAlign::Start);
   m_label->setMaxWidth(m_isVertical ? containerWidth : (m_maxWidth * m_contentScale));
@@ -117,7 +117,7 @@ void WeatherWidget::sync(Renderer& renderer) {
   if (glyph != m_lastGlyph) {
     m_lastGlyph = glyph;
     m_glyph->setGlyph(glyph);
-    m_glyph->setColor(widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)));
+    m_glyph->setColor(widgetIconColorOr(colorSpecFromRole(ColorRole::OnSurface)));
     m_glyph->measure(renderer);
     changed = true;
   }
