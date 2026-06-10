@@ -140,7 +140,30 @@ namespace lockscreen_login_box {
     return style;
   }
 
+  void applyDefaultSettings(
+      std::unordered_map<std::string, WidgetSettingValue>& settings, desktop_settings::DesktopWidgetSettingsScope scope
+  ) {
+    if (scope == desktop_settings::DesktopWidgetSettingsScope::Widget) {
+      settings.insert_or_assign(std::string(kShowLoginButtonKey), true);
+      settings.insert_or_assign(std::string(kInputOpacityKey), 1.0);
+      settings.insert_or_assign(std::string(kInputRadiusKey), 6.0);
+    }
+    if (scope == desktop_settings::DesktopWidgetSettingsScope::Background) {
+      settings.insert_or_assign("background_color", std::string("surface_variant"));
+      settings.insert_or_assign("background_opacity", 0.88);
+      settings.insert_or_assign("background_radius", 12.0);
+    }
+  }
+
+  void applyAllDefaultSettings(std::unordered_map<std::string, WidgetSettingValue>& settings) {
+    applyDefaultSettings(settings, desktop_settings::DesktopWidgetSettingsScope::Widget);
+    applyDefaultSettings(settings, desktop_settings::DesktopWidgetSettingsScope::Background);
+  }
+
   void normalizeSettings(std::unordered_map<std::string, WidgetSettingValue>& settings) {
+    if (!settings.contains(std::string(kShowLoginButtonKey))) {
+      settings.insert_or_assign(std::string(kShowLoginButtonKey), true);
+    }
     clampOpacitySetting(settings, "background_opacity");
     clampRadiusSetting(settings, "background_radius");
     clampOpacitySetting(settings, kInputOpacityKey);
@@ -191,6 +214,8 @@ namespace lockscreen_login_box {
           desktop_widgets::outputLogicalWidth(output), desktop_widgets::outputLogicalHeight(output), widget.cx,
           widget.cy
       );
+      applyDefaultSettings(widget.settings, desktop_settings::DesktopWidgetSettingsScope::Widget);
+      applyDefaultSettings(widget.settings, desktop_settings::DesktopWidgetSettingsScope::Background);
       widgets.insert(widgets.begin(), std::move(widget));
       outputsWithLoginBox.insert(outputKey);
     }

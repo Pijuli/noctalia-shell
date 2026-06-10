@@ -5,6 +5,7 @@
 #include "render/scene/input_dispatcher.h"
 #include "render/scene/node.h"
 #include "shell/desktop/desktop_widget_factory.h"
+#include "shell/desktop/desktop_widget_settings_registry.h"
 #include "shell/widgets_editor/background_widgets_editor_config.h"
 #include "ui/controls/select_dropdown_popup.h"
 #include "wayland/layer_surface.h"
@@ -60,6 +61,7 @@ public:
   void requestRedraw();
 
   void applySettingChange(const std::string& key, WidgetSettingValue value);
+  void resetSelectedWidgetSettings();
 
 private:
   enum class ScaleCorner : std::uint8_t {

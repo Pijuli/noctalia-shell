@@ -248,4 +248,23 @@ namespace desktop_settings {
     return out;
   }
 
+  void applyDesktopWidgetDefaultSettings(
+      std::unordered_map<std::string, WidgetSettingValue>& settings, std::string_view type,
+      DesktopWidgetSettingsScope scope
+  ) {
+    const std::vector<WidgetSettingSpec> specs = scope == DesktopWidgetSettingsScope::Widget
+        ? desktopWidgetSettingSpecs(type)
+        : commonDesktopWidgetSettingSpecs(type);
+    for (const auto& spec : specs) {
+      settings.insert_or_assign(spec.schema.key, spec.schema.defaultValue);
+    }
+  }
+
+  void applyAllDesktopWidgetDefaultSettings(
+      std::unordered_map<std::string, WidgetSettingValue>& settings, std::string_view type
+  ) {
+    applyDesktopWidgetDefaultSettings(settings, type, DesktopWidgetSettingsScope::Widget);
+    applyDesktopWidgetDefaultSettings(settings, type, DesktopWidgetSettingsScope::Background);
+  }
+
 } // namespace desktop_settings

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/config_types.h"
+#include "shell/desktop/desktop_widget_settings_registry.h"
 #include "ui/palette.h"
 #include "wayland/wayland_connection.h"
 
@@ -40,6 +41,10 @@ namespace lockscreen_login_box {
   findForOutput(const std::vector<DesktopWidgetState>& widgets, std::string_view outputKey);
 
   [[nodiscard]] LoginBoxStyle resolveStyle(const std::unordered_map<std::string, WidgetSettingValue>& settings);
+  void applyDefaultSettings(
+      std::unordered_map<std::string, WidgetSettingValue>& settings, desktop_settings::DesktopWidgetSettingsScope scope
+  );
+  void applyAllDefaultSettings(std::unordered_map<std::string, WidgetSettingValue>& settings);
   void normalizeSettings(std::unordered_map<std::string, WidgetSettingValue>& settings);
 
   void ensureWidgets(std::vector<DesktopWidgetState>& widgets, const WaylandConnection& wayland);
