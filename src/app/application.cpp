@@ -799,6 +799,18 @@ void Application::initServices() {
     }
 
     try {
+      m_accountsService = std::make_unique<AccountsService>(*m_systemBus);
+      m_accountsService->setChangeCallback([this]() {
+        m_panelManager.refresh();
+        m_settingsWindow.onExternalOptionsChanged();
+      });
+      kLog.info("accounts service active for uid {}", m_accountsService->sessionUid());
+    } catch (const std::exception& e) {
+      kLog.warn("accounts service disabled: {}", e.what());
+      m_accountsService.reset();
+    }
+
+    try {
       m_powerProfilesService = std::make_unique<PowerProfilesService>(*m_systemBus);
       m_powerProfilesService->setChangeCallback(
           [this, shouldRefreshControlCenter](const PowerProfilesState& state, PowerProfilesChangeOrigin origin) {
@@ -1151,7 +1163,8 @@ void Application::initUi() {
   m_wallpaper.initialize(m_wayland, &m_configService, &m_renderContext, &m_sharedTextureCache);
   m_backdrop.initialize(m_wayland, &m_configService, &m_sharedTextureCache, &m_glShared);
   m_settingsWindow.initialize(
-      m_wayland, &m_configService, &m_renderContext, &m_dependencyService, m_upowerService.get(), &m_idleManager
+      m_wayland, &m_configService, &m_renderContext, &m_dependencyService, m_upowerService.get(), &m_idleManager,
+      m_accountsService.get()
   );
   m_settingsWindow.setPluginManager(&m_pluginManager);
   m_settingsWindow.setOpenDesktopWidgetEditor([this]() {
@@ -1404,7 +1417,7 @@ void Application::initUi() {
           m_networkService.get(), m_networkSecretAgent.get(), m_bluetoothService.get(), m_bluetoothAgent.get(),
           m_brightnessService.get(), m_systemMonitor.get(), &m_screenTimeService, &m_gammaService, &m_themeService,
           &m_idleInhibitor, &m_dependencyService, &m_compositorPlatform, &m_ipcService, &m_wallpaper,
-          &m_calendarService, &m_scriptApi, &m_clipboardService
+          &m_calendarService, &m_scriptApi, &m_clipboardService, m_accountsService.get()
       )
   );
   {

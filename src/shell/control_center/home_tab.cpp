@@ -4,12 +4,15 @@
 #include "config/config_service.h"
 #include "core/build_info.h"
 #include "core/deferred_call.h"
+#include "core/log.h"
 #include "cursor-shape-v1-client-protocol.h"
+#include "dbus/accounts/accounts_service.h"
 #include "dbus/mpris/mpris_art.h"
 #include "dbus/mpris/mpris_service.h"
 #include "i18n/i18n.h"
 #include "net/http_client.h"
 #include "render/scene/input_area.h"
+#include "shell/avatar_path.h"
 #include "shell/control_center/shortcut_registry.h"
 #include "shell/panel/panel_button_style.h"
 #include "shell/panel/panel_manager.h"
@@ -35,6 +38,8 @@
 using namespace control_center;
 
 namespace {
+
+  constexpr Logger kLog("control-center");
 
   constexpr float kHomeAvatarScale = 2.6f;
   // Bottom row split: media/clock column grows more than the shortcuts column so the row feels balanced
@@ -67,13 +72,13 @@ namespace {
     return cellWidth + horizontalPadding;
   }
 
-  std::filesystem::path avatarStartDirectory(const ConfigService* config) {
-    if (config != nullptr) {
-      const std::filesystem::path current(config->config().shell.avatarPath);
-      std::error_code ec;
-      if (!current.empty() && std::filesystem::exists(current, ec) && current.has_parent_path()) {
-        return current.parent_path();
-      }
+  std::filesystem::path avatarStartDirectory(const AccountsService* accounts, const ConfigService* config) {
+    const std::string currentPath =
+        config != nullptr ? shell::resolvedAvatarPath(accounts, config->config()) : std::string{};
+    const std::filesystem::path current(currentPath);
+    std::error_code ec;
+    if (!current.empty() && std::filesystem::exists(current, ec) && current.has_parent_path()) {
+      return current.parent_path();
     }
     if (const char* home = std::getenv("HOME"); home != nullptr && home[0] != '\0') {
       return std::filesystem::path(home) / "Pictures";
@@ -118,28 +123,28 @@ HomeTab::HomeTab(
     PowerProfilesService* powerProfiles, ConfigService* config, INetworkService* network, BluetoothService* bluetooth,
     GammaService* nightLight, noctalia::theme::ThemeService* theme, NotificationManager* notifications,
     IdleInhibitor* idleInhibitor, DependencyService* dependencies, CompositorPlatform* platform, IpcService* ipc,
-    Wallpaper* wallpaper, scripting::ScriptApiContext* scriptApi, ClipboardService* clipboard
+    Wallpaper* wallpaper, scripting::ScriptApiContext* scriptApi, ClipboardService* clipboard, AccountsService* accounts
 )
-    : m_mpris(mpris), m_httpClient(httpClient), m_weather(weather), m_config(config), m_wallpaper(wallpaper),
-      m_services{
-          .network = network,
-          .bluetooth = bluetooth,
-          .nightLight = nightLight,
-          .theme = theme,
-          .notifications = notifications,
-          .idleInhibitor = idleInhibitor,
-          .audio = audio,
-          .powerProfiles = powerProfiles,
-          .mpris = mpris,
-          .weather = weather,
-          .config = config,
-          .dependencies = dependencies,
-          .platform = platform,
-          .ipc = ipc,
-          .scriptApi = scriptApi,
-          .httpClient = httpClient,
-          .clipboard = clipboard,
-      } {}
+    : m_mpris(mpris), m_httpClient(httpClient), m_weather(weather), m_config(config), m_accounts(accounts),
+      m_wallpaper(wallpaper), m_services{
+                                  .network = network,
+                                  .bluetooth = bluetooth,
+                                  .nightLight = nightLight,
+                                  .theme = theme,
+                                  .notifications = notifications,
+                                  .idleInhibitor = idleInhibitor,
+                                  .audio = audio,
+                                  .powerProfiles = powerProfiles,
+                                  .mpris = mpris,
+                                  .weather = weather,
+                                  .config = config,
+                                  .dependencies = dependencies,
+                                  .platform = platform,
+                                  .ipc = ipc,
+                                  .scriptApi = scriptApi,
+                                  .httpClient = httpClient,
+                                  .clipboard = clipboard,
+                              } {}
 
 HomeTab::~HomeTab() = default;
 
@@ -199,13 +204,15 @@ std::unique_ptr<Flex> HomeTab::create() {
     options.defaultViewMode = FileDialogViewMode::Grid;
     options.title = i18n::tr("control-center.home.select-avatar");
     options.extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"};
-    options.startDirectory = avatarStartDirectory(m_config);
+    options.startDirectory = avatarStartDirectory(m_accounts, m_config);
 
     (void)FileDialog::open(std::move(options), [this](std::optional<std::filesystem::path> result) {
       if (!result.has_value() || m_config == nullptr) {
         return;
       }
-      (void)m_config->setOverride({"shell", "avatar_path"}, result->string());
+      if (!shell::applyAvatarPath(m_accounts, m_config, result->string())) {
+        kLog.warn("failed to set avatar path");
+      }
     });
   });
   m_userAvatarArea = avatarArea.get();
@@ -989,7 +996,7 @@ void HomeTab::sync(Renderer& renderer) {
   syncWallpaperBackground(renderer);
 
   if (m_userAvatar != nullptr && m_config != nullptr) {
-    const std::string avatarPath = m_config->config().shell.avatarPath;
+    const std::string avatarPath = shell::resolvedAvatarPath(m_accounts, m_config->config());
     if (avatarPath != m_loadedAvatarPath) {
       if (avatarPath.empty()) {
         m_userAvatar->clear(renderer);

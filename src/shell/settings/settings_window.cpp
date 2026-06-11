@@ -71,7 +71,7 @@ SettingsWindow::~SettingsWindow() { destroyWindow(); }
 
 void SettingsWindow::initialize(
     WaylandConnection& wayland, ConfigService* config, RenderContext* renderContext, DependencyService* dependencies,
-    UPowerService* upower, IdleManager* idleManager
+    UPowerService* upower, IdleManager* idleManager, AccountsService* accounts
 ) {
   m_wayland = &wayland;
   m_idleManager = idleManager;
@@ -79,6 +79,7 @@ void SettingsWindow::initialize(
   m_renderContext = renderContext;
   m_dependencies = dependencies;
   m_upower = upower;
+  m_accounts = accounts;
   m_showAdvanced = m_config != nullptr ? m_config->config().shell.settingsShowAdvanced : false;
 }
 

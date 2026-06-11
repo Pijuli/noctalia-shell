@@ -27,6 +27,7 @@
 
 class Box;
 class Button;
+class AccountsService;
 class ConfigService;
 class DependencyService;
 class Flex;
@@ -52,7 +53,7 @@ public:
 
   void initialize(
       WaylandConnection& wayland, ConfigService* config, RenderContext* renderContext, DependencyService* dependencies,
-      UPowerService* upower, IdleManager* idleManager
+      UPowerService* upower, IdleManager* idleManager, AccountsService* accounts = nullptr
   );
 
   void open();
@@ -174,6 +175,7 @@ private:
   RenderContext* m_renderContext = nullptr;
   DependencyService* m_dependencies = nullptr;
   UPowerService* m_upower = nullptr;
+  AccountsService* m_accounts = nullptr;
   Label* m_idleLiveStatusLabel = nullptr;
   std::vector<Label*> m_sessionActionSummaryLabels;
   std::shared_ptr<std::vector<SessionPanelActionConfig>> m_sessionActionsEditState;

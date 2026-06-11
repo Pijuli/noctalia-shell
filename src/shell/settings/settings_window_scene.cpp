@@ -4,6 +4,7 @@
 #include "dbus/upower/upower_service.h"
 #include "i18n/i18n.h"
 #include "render/render_context.h"
+#include "shell/avatar_path.h"
 #include "shell/greeter/greeter_appearance_sync.h"
 #include "shell/settings/font_family_catalog.h"
 #include "shell/settings/settings_bar_management.h"
@@ -262,6 +263,9 @@ void SettingsWindow::applyPendingContentScrollTarget(float margin) {
 
 settings::RegistryEnvironment SettingsWindow::buildRegistryEnvironment() const {
   settings::RegistryEnvironment env;
+  if (m_config != nullptr) {
+    env.shellAvatarPath = shell::resolvedAvatarPath(m_accounts, m_config->config());
+  }
   env.niriBackdropSupported = (m_wayland != nullptr && compositors::isNiri());
   env.screencopySupported = m_wayland != nullptr && m_wayland->hasScreencopy();
   env.niriOverviewTypeToLaunchSupported = (m_wayland != nullptr && compositors::isNiri());

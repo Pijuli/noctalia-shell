@@ -1079,7 +1079,7 @@ namespace settings {
         SettingsSection::Shell, "general", tr("settings.schema.shell.avatar-path.label"),
         tr("settings.schema.shell.avatar-path.description"), {"shell", "avatar_path"},
         TextSetting{
-            .value = cfg.shell.avatarPath,
+            .value = env.shellAvatarPath,
             .placeholder = tr("settings.schema.shell.avatar-path.placeholder"),
             .browseMode = TextSettingBrowseMode::OpenFile,
             .browseFileExtensions = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".gif"}

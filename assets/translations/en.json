@@ -1934,7 +1934,7 @@
       },
       "shell": {
         "avatar-path": {
-          "description": "Path to a custom avatar image",
+          "description": "Avatar image shown in the control center.",
           "label": "Avatar Path",
           "placeholder": "/path/to/avatar.png"
         },

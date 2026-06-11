@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+class AccountsService;
 class Button;
 class Box;
 class CompositorPlatform;
@@ -45,7 +46,7 @@ public:
       GammaService* nightLight, noctalia::theme::ThemeService* theme, NotificationManager* notifications,
       IdleInhibitor* idleInhibitor, DependencyService* dependencies, CompositorPlatform* platform, IpcService* ipc,
       Wallpaper* wallpaper = nullptr, scripting::ScriptApiContext* scriptApi = nullptr,
-      ClipboardService* clipboard = nullptr
+      ClipboardService* clipboard = nullptr, AccountsService* accounts = nullptr
   );
   ~HomeTab() override;
 
@@ -71,6 +72,7 @@ private:
   HttpClient* m_httpClient = nullptr;
   WeatherService* m_weather = nullptr;
   ConfigService* m_config = nullptr;
+  AccountsService* m_accounts = nullptr;
   Wallpaper* m_wallpaper = nullptr;
   ShortcutServices m_services;
   bool m_active = false;
