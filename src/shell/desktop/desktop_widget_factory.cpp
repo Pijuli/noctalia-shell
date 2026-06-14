@@ -223,7 +223,8 @@ std::unique_ptr<DesktopWidget> DesktopWidgetFactory::create(
     }
     auto widget = std::make_unique<DesktopWeatherWidget>(
         m_weather, getColorSpecSetting(settings, "color", colorSpecFromRole(ColorRole::OnSurface)),
-        getBoolSetting(settings, "shadow", true)
+        getBoolSetting(settings, "shadow", true), getBoolSetting(settings, "show_forecast", false),
+        getIntSetting(settings, "forecast_days", 3)
     );
     applyCommonSettings(*widget, settings);
     widget->setContentScale(contentScale);

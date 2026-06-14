@@ -7,6 +7,7 @@
 #include "util/string_utils.h"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace desktop_settings {
   namespace {
@@ -39,6 +40,23 @@ namespace desktop_settings {
 
     WidgetSettingSpec boolSpec(std::string_view key, bool defaultValue) {
       return baseSpec(key, WidgetControlKind::Bool, defaultValue);
+    }
+
+    WidgetSettingSpec
+    intSpec(std::string_view key, std::int64_t defaultValue, double minValue, double maxValue, double step = 1.0) {
+      auto spec = baseSpec(key, WidgetControlKind::Int, defaultValue);
+      spec.schema.minValue = minValue;
+      spec.schema.maxValue = maxValue;
+      spec.schema.step = step;
+      return spec;
+    }
+
+    WidgetSettingSpec stepperIntSpec(
+        std::string_view key, std::int64_t defaultValue, double minValue, double maxValue, double step = 1.0
+    ) {
+      auto spec = intSpec(key, defaultValue, minValue, maxValue, step);
+      spec.stepper = true;
+      return spec;
     }
 
     WidgetSettingSpec
@@ -262,6 +280,10 @@ namespace desktop_settings {
       add(colorSpec("color", "on_surface"));
       add(fontFamilySpec());
       add(boolSpec("shadow", true));
+      add(boolSpec("show_forecast", false));
+      auto forecastDays = stepperIntSpec("forecast_days", 3, 1.0, 6.0, 1.0);
+      forecastDays.visibleWhen = WidgetSettingVisibility{"show_forecast", {"true"}};
+      add(std::move(forecastDays));
     } else if (type == "media_player") {
       add(segmentedSpec(
           "layout", "horizontal",

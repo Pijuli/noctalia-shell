@@ -21,6 +21,7 @@
 #include <cmath>
 #include <functional>
 #include <linux/input-event-codes.h>
+#include <optional>
 
 namespace {
 
@@ -253,6 +254,28 @@ namespace {
     );
   }
 
+  std::unique_ptr<Flex> makeStepperRow(
+      std::string_view labelText, const std::string& key, int fallback, int minVal, int maxVal, int step,
+      const std::optional<std::string>& valueSuffix, const Settings& s, BackgroundWidgetsEditor* editor
+  ) {
+    const int currentValue =
+        std::clamp(static_cast<int>(std::llround(getDouble(s, key, static_cast<double>(fallback)))), minVal, maxVal);
+    return makeRow(
+        labelText,
+        ui::stepper({
+            .minValue = minVal,
+            .maxValue = maxVal,
+            .step = std::max(1, step),
+            .value = currentValue,
+            .valueSuffix = valueSuffix,
+            .flexGrow = 1.0f,
+            .onValueCommitted = [editor, key](int value) {
+              editor->applySettingChange(key, static_cast<std::int64_t>(value));
+            },
+        })
+    );
+  }
+
   std::unique_ptr<Flex> makeColorSpecRow(
       std::string_view labelText, const std::string& key, std::string fallbackValue, const Settings& s,
       BackgroundWidgetsEditor* editor
@@ -403,12 +426,19 @@ namespace {
 
       case settings::WidgetControlKind::Int: {
         const auto* defVal = std::get_if<std::int64_t>(&spec.schema.defaultValue);
-        const auto fallback = static_cast<double>(defVal != nullptr ? *defVal : 0);
-        const double minVal = spec.schema.minValue.value_or(0.0);
-        const double maxVal = spec.schema.maxValue.value_or(std::max(fallback, 100.0));
-        content.addChild(makeIntSliderRow(
-            label, spec.schema.key, fallback, minVal, maxVal, spec.schema.step.value_or(1.0), s, editor
-        ));
+        const int fallback = static_cast<int>(defVal != nullptr ? *defVal : 0);
+        const int minVal = static_cast<int>(std::lround(spec.schema.minValue.value_or(0.0)));
+        const int maxVal = static_cast<int>(std::lround(spec.schema.maxValue.value_or(std::max(fallback, 100))));
+        const int step = static_cast<int>(std::max(1.0, spec.schema.step.value_or(1.0)));
+        if (spec.stepper) {
+          const std::optional<std::string> suffix =
+              spec.valueSuffix.empty() ? std::nullopt : std::optional<std::string>{spec.valueSuffix};
+          content.addChild(makeStepperRow(label, spec.schema.key, fallback, minVal, maxVal, step, suffix, s, editor));
+        } else {
+          content.addChild(
+              makeIntSliderRow(label, spec.schema.key, static_cast<double>(fallback), minVal, maxVal, step, s, editor)
+          );
+        }
         break;
       }
 
