@@ -528,9 +528,6 @@ struct DesktopWidgetState {
   // auto-fits the content's natural size. Resizing in the editor sets explicit values.
   float boxWidth = 0.0f;
   float boxHeight = 0.0f;
-  // Migration-only (schema v1 `scale`): applied to an unsized tile so legacy widgets keep
-  // their size until the editor bakes it into an explicit box. Never written back out.
-  float legacyScale = 1.0f;
   float rotationRad = 0.0f;
   bool flipX = false;
   bool flipY = false;

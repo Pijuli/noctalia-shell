@@ -167,10 +167,6 @@ namespace {
     if (auto boxHeight = finiteDouble(widgetTable["box_height"])) {
       widget.boxHeight = std::max(0.0f, static_cast<float>(*boxHeight));
     }
-    // schema v1 migration: a legacy `scale` is honored only until the editor bakes it into a box.
-    if (auto scale = finiteDouble(widgetTable["scale"])) {
-      widget.legacyScale = std::clamp(static_cast<float>(*scale), 0.2f, 8.0f);
-    }
     if (auto rotation = finiteDouble(widgetTable["rotation"])) {
       widget.rotationRad = static_cast<float>(*rotation);
     }

@@ -332,9 +332,9 @@ void BackgroundWidgetsEditor::handleWidgetPress(const std::string& id) {
 
 bool BackgroundWidgetsEditor::isOpen() const noexcept { return m_open; }
 
-float BackgroundWidgetsEditor::widgetContentScale(const DesktopWidgetState& state) const {
+float BackgroundWidgetsEditor::widgetContentScale() const {
   const float baseUiScale = m_config != nullptr ? m_config->config().shell.uiScale : 1.0f;
-  return desktop_widgets::widgetContentScale(baseUiScale, state);
+  return desktop_widgets::widgetContentScale(baseUiScale);
 }
 
 void BackgroundWidgetsEditor::syncSurfaces() {
@@ -735,7 +735,7 @@ void BackgroundWidgetsEditor::rebuildScene(OverlaySurface& surface) {
       continue;
     }
 
-    auto widget = m_factory->create(widgetState.type, widgetState.settings, widgetContentScale(widgetState));
+    auto widget = m_factory->create(widgetState.type, widgetState.settings, widgetContentScale());
     if (widget == nullptr) {
       continue;
     }
@@ -783,20 +783,6 @@ void BackgroundWidgetsEditor::rebuildScene(OverlaySurface& surface) {
     EditorWidgetView view;
     view.intrinsicWidth = std::max(1.0f, widget->intrinsicWidth());
     view.intrinsicHeight = std::max(1.0f, widget->intrinsicHeight());
-
-    // schema v1 migration: now that the natural size is measured (with the legacy scale already
-    // applied), bake it into an explicit box so it persists in the new schema and no longer
-    // depends on `scale`. The login box stays unsized (it spans the screen).
-    if (!lockscreen_login_box::isLoginBoxWidget(widgetState)
-        && widgetState.boxWidth <= 0.0f
-        && widgetState.boxHeight <= 0.0f
-        && std::abs(widgetState.legacyScale - 1.0f) > 0.001f) {
-      if (DesktopWidgetState* mutableState = findWidgetState(widgetState.id); mutableState != nullptr) {
-        mutableState->boxWidth = view.intrinsicWidth;
-        mutableState->boxHeight = view.intrinsicHeight;
-        mutableState->legacyScale = 1.0f;
-      }
-    }
 
     auto bodyArea = std::make_unique<InputArea>();
     view.bodyArea = bodyArea.get();
@@ -1395,7 +1381,7 @@ void BackgroundWidgetsEditor::applyViewState(
         }
       }
     }
-    view.widget->setContentScale(widgetContentScale(state));
+    view.widget->setContentScale(widgetContentScale());
     view.widget->setBox(state.boxWidth, state.boxHeight);
     view.widget->update(*m_renderContext);
     view.widget->layout(*m_renderContext);

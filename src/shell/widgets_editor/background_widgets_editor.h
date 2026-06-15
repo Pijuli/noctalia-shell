@@ -196,7 +196,7 @@ private:
   [[nodiscard]] const DesktopWidgetState* findWidgetState(const std::string& id) const;
   [[nodiscard]] std::string effectiveOutputName(const DesktopWidgetState& state) const;
   [[nodiscard]] bool shouldSnap() const;
-  [[nodiscard]] float widgetContentScale(const DesktopWidgetState& state) const;
+  [[nodiscard]] float widgetContentScale() const;
   [[nodiscard]] std::string nextWidgetId() const;
   [[nodiscard]] float duplicateOffset() const;
   [[nodiscard]] std::vector<DesktopWidgetState> selectedWidgetTemplates() const;

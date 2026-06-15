@@ -626,7 +626,7 @@ void BackgroundWidgetsEditor::applySettingChange(const std::string& key, WidgetS
       return;
     }
 
-    auto newWidget = m_factory->create(state->type, state->settings, widgetContentScale(*state));
+    auto newWidget = m_factory->create(state->type, state->settings, widgetContentScale());
     if (newWidget == nullptr) {
       return;
     }
