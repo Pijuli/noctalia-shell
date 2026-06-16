@@ -303,7 +303,7 @@ namespace settings {
     std::string_view widgetBadgeGlyph(WidgetReferenceKind kind) {
       switch (kind) {
       case WidgetReferenceKind::BuiltIn:
-        return "puzzle";
+        return "box";
       case WidgetReferenceKind::Named:
         return "tag";
       case WidgetReferenceKind::Plugin:
