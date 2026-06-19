@@ -11,6 +11,7 @@
 class Box;
 class Glyph;
 class Label;
+class Node;
 
 enum class BatteryDisplayMode : std::uint8_t { Graphic, Glyph };
 
@@ -54,8 +55,13 @@ private:
   Box* m_bodyBg = nullptr;
   Box* m_fillRect = nullptr;
   Box* m_terminalNub = nullptr;
-  Label* m_overlayLabel = nullptr;
   Glyph* m_overlayGlyph = nullptr;
+  Node* m_inlineFillClip = nullptr;
+  Node* m_inlineEmptyClip = nullptr;
+  Label* m_labelOnFill = nullptr;
+  Label* m_labelOnEmpty = nullptr;
+  float m_inlineLabelW = 0.0f;
+  float m_inlineLabelH = 0.0f;
 
   // Animated fill
   float m_animatedPct = 0.0f;

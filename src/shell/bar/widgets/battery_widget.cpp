@@ -4,8 +4,10 @@
 #include "i18n/i18n.h"
 #include "render/core/renderer.h"
 #include "render/scene/input_area.h"
+#include "render/scene/node.h"
 #include "time/time_format.h"
 #include "ui/builders.h"
+#include "ui/controls/label.h"
 #include "ui/palette.h"
 #include "ui/style.h"
 
@@ -108,16 +110,23 @@ void BatteryWidget::createGraphicMode() {
       })
   );
 
-  if (m_showLabel) {
-    container->addChild(
-        ui::label({
-            .out = &m_overlayLabel,
-            .fontFamily = labelFontFamily(),
-            .color = widgetForegroundOr(colorSpecFromRole(ColorRole::OnSurface)),
-            .fontWeight = labelFontWeight(),
-        })
-    );
-  }
+  // The number is drawn twice, each copy clipped to one side of the fill boundary so the digits
+  // contrast whatever is behind them (see updateFillGeometry).
+  auto makeInlineLabel = [&](Node*& clipOut, Label*& labelOut) {
+    auto clip = std::make_unique<Node>();
+    clip->setClipChildren(true);
+    clipOut = container->addChild(std::move(clip));
+
+    auto label = std::make_unique<Label>();
+    label->setFontFamily(labelFontFamily());
+    label->setFontWeight(labelFontWeight());
+    // InkCentered, not the default cap-band centering: fonts that report no cap height fall back
+    // to top-alignment, which left the number riding high and clipped against the body's top.
+    label->setBaselineMode(LabelBaselineMode::InkCentered);
+    labelOut = static_cast<Label*>(clipOut->addChild(std::move(label)));
+  };
+  makeInlineLabel(m_inlineFillClip, m_labelOnFill);
+  makeInlineLabel(m_inlineEmptyClip, m_labelOnEmpty);
 
   container->addChild(
       ui::glyph({
@@ -173,35 +182,41 @@ void BatteryWidget::layoutGraphicMode(Renderer& renderer) {
   }
 
   const float scale = (Style::fontSizeBody / 14.0f) * m_contentScale;
-  const float bodyW = std::round(kGraphicBodyWidth * scale);
-  const float bodyH = std::round(kGraphicBodyHeight * scale);
+  float bodyW = std::round(kGraphicBodyWidth * scale);
+  float bodyH = std::round(kGraphicBodyHeight * scale);
   const float termW = std::round(kGraphicTerminalWidth * scale);
   const float termH = std::round(kGraphicTerminalHeight * scale);
   const float cornerR = std::round(kGraphicCornerRadius * scale);
   const float labelGap = Style::spaceXs * m_contentScale;
-  const float stateGap = std::round(Style::spaceXs * 0.5f * m_contentScale);
-  const bool showLabel = m_overlayLabel != nullptr && m_showLabel;
+  const bool showLabel = m_showLabel && m_labelOnFill != nullptr;
   const bool showStateGlyph = m_overlayGlyph != nullptr && m_overlayGlyph->visible();
+  // The state icon sits beside the battery when the number is shown, else centered in the body.
   const bool showStateGlyphOutside = showStateGlyph && showLabel;
   const bool showStateGlyphInside = showStateGlyph && !showLabel;
-  if (showLabel) {
-    m_overlayLabel->setFontSize((m_isVertical ? Style::fontSizeCaption : Style::fontSizeBody) * m_contentScale);
-    m_overlayLabel->measure(renderer);
-  }
   if (showStateGlyph) {
     m_overlayGlyph->setGlyphSize(Style::fontSizeCaption * m_contentScale);
     m_overlayGlyph->measure(renderer);
   }
 
+  const float labelW = showLabel ? m_inlineLabelW : 0.0f;
+
+  // Widen only the digit-width axis to fit the number; the cross axis keeps the natural battery
+  // height (growing it just makes the battery look too tall).
+  if (showLabel) {
+    const float padX = std::round(Style::spaceXs * m_contentScale);
+    if (m_isVertical) {
+      bodyH = std::max(bodyH, labelW + 2.0f * padX);
+    } else {
+      bodyW = std::max(bodyW, labelW + 2.0f * padX);
+    }
+  }
+
   if (m_isVertical) {
     const float graphicW = bodyH;
     const float graphicH = bodyW + termW;
-    const float labelW = showLabel ? m_overlayLabel->width() : 0.0f;
-    const float labelH = showLabel ? m_overlayLabel->height() : 0.0f;
     const float stateW = showStateGlyphOutside ? m_overlayGlyph->width() : 0.0f;
     const float stateH = showStateGlyphOutside ? m_overlayGlyph->height() : 0.0f;
-    const float labelGroupH = labelH + (showStateGlyphOutside ? stateGap + stateH : 0.0f);
-    const float rootW = std::max({graphicW, labelW, stateW});
+    const float rootW = std::max(graphicW, stateW);
     const float bodyX = std::round((rootW - graphicW) * 0.5f);
     const float bodyY = termW;
 
@@ -216,12 +231,8 @@ void BatteryWidget::layoutGraphicMode(Renderer& renderer) {
     m_fillRect->setRadius(cornerR);
     updateFillGeometry();
 
-    if (showLabel) {
-      m_overlayLabel->setPosition(std::round((rootW - labelW) * 0.5f), graphicH + labelGap);
-    }
-
     if (showStateGlyphOutside) {
-      m_overlayGlyph->setPosition(std::round((rootW - stateW) * 0.5f), graphicH + labelGap + labelH + stateGap);
+      m_overlayGlyph->setPosition(std::round((rootW - stateW) * 0.5f), graphicH + labelGap);
     } else if (showStateGlyphInside) {
       m_overlayGlyph->setPosition(
           bodyX + std::round((bodyH - m_overlayGlyph->width()) * 0.5f),
@@ -229,17 +240,13 @@ void BatteryWidget::layoutGraphicMode(Renderer& renderer) {
       );
     }
 
-    rootNode->setSize(rootW, graphicH + (showLabel ? labelGap + labelGroupH : 0.0f));
+    rootNode->setSize(rootW, graphicH + (showStateGlyphOutside ? labelGap + stateH : 0.0f));
   } else {
     const float graphicW = bodyW + termW;
     const float graphicH = bodyH;
-    const float labelW = showLabel ? m_overlayLabel->width() : 0.0f;
-    const float labelH = showLabel ? m_overlayLabel->height() : 0.0f;
     const float stateW = showStateGlyphOutside ? m_overlayGlyph->width() : 0.0f;
     const float stateH = showStateGlyphOutside ? m_overlayGlyph->height() : 0.0f;
-    const float labelGroupW = labelW + (showStateGlyphOutside ? stateGap + stateW : 0.0f);
-    const float labelGroupH = std::max(labelH, stateH);
-    const float rootH = std::max(graphicH, labelGroupH);
+    const float rootH = std::max(graphicH, stateH);
     const float bodyY = std::round((rootH - bodyH) * 0.5f);
 
     m_bodyBg->setRadius(cornerR);
@@ -253,12 +260,8 @@ void BatteryWidget::layoutGraphicMode(Renderer& renderer) {
     m_fillRect->setRadius(cornerR);
     updateFillGeometry();
 
-    if (showLabel) {
-      m_overlayLabel->setPosition(graphicW + labelGap, std::round((rootH - labelH) * 0.5f));
-    }
-
     if (showStateGlyphOutside) {
-      m_overlayGlyph->setPosition(graphicW + labelGap + labelW + stateGap, std::round((rootH - stateH) * 0.5f));
+      m_overlayGlyph->setPosition(graphicW + labelGap, std::round((rootH - stateH) * 0.5f));
     } else if (showStateGlyphInside) {
       m_overlayGlyph->setPosition(
           std::round((bodyW - m_overlayGlyph->width()) * 0.5f),
@@ -266,7 +269,7 @@ void BatteryWidget::layoutGraphicMode(Renderer& renderer) {
       );
     }
 
-    rootNode->setSize(graphicW + (showLabel ? labelGap + labelGroupW : 0.0f), rootH);
+    rootNode->setSize(graphicW + (showStateGlyphOutside ? labelGap + stateW : 0.0f), rootH);
   }
 }
 
@@ -316,6 +319,44 @@ void BatteryWidget::updateFillGeometry() {
     const float fillW = bodyW * fraction;
     m_fillRect->setPosition(m_bodyBg->x(), m_bodyBg->y());
     m_fillRect->setSize(fillW, bodyH);
+  }
+
+  // Inline two-tone number: clip one copy to the filled rect and the other to the empty remainder,
+  // both centered on the body. The clip frames track the fill, so the color split animates with it.
+  if (m_inlineFillClip != nullptr
+      && m_inlineEmptyClip != nullptr
+      && m_labelOnFill != nullptr
+      && m_labelOnEmpty != nullptr) {
+    const float bx = m_bodyBg->x();
+    const float by = m_bodyBg->y();
+    const float bw = m_bodyBg->width();
+    const float bh = m_bodyBg->height();
+    const float cx = bx + std::round((bw - m_inlineLabelW) * 0.5f);
+    const float cy = by + std::round((bh - m_inlineLabelH) * 0.5f);
+
+    const float fx = m_fillRect->x();
+    const float fy = m_fillRect->y();
+    const float fw = m_fillRect->width();
+    const float fh = m_fillRect->height();
+
+    m_inlineFillClip->setPosition(fx, fy);
+    m_inlineFillClip->setFrameSize(fw, fh);
+    m_labelOnFill->setPosition(cx - fx, cy - fy);
+
+    // Empty side = body minus the fill (to its right horizontally, above it vertically).
+    float ex = bx;
+    float ey = by;
+    float ew = bw;
+    float eh = bh;
+    if (m_isVertical) {
+      eh = bh - fh;
+    } else {
+      ex = bx + fw;
+      ew = bw - fw;
+    }
+    m_inlineEmptyClip->setPosition(ex, ey);
+    m_inlineEmptyClip->setFrameSize(ew, eh);
+    m_labelOnEmpty->setPosition(cx - ex, cy - ey);
   }
 }
 
@@ -409,11 +450,25 @@ void BatteryWidget::syncState(Renderer& renderer) {
       updateFillGeometry();
     }
 
-    // Graphic mode label
-    if (m_overlayLabel != nullptr && m_showLabel) {
-      m_overlayLabel->setText(m_isVertical ? std::to_string(pct) : std::to_string(pct) + "%");
-      m_overlayLabel->setColor(fgColor);
-      m_overlayLabel->measure(renderer);
+    // Both copies share text and size, differing only in color: the copy over the bright fill
+    // uses the contrasting Surface color, the copy over the empty body uses the foreground color.
+    const std::string text = std::to_string(pct);
+    const float fontSize = Style::fontSizeCaption * m_contentScale;
+    auto applyInline = [&](Label* label, const ColorSpec& color) {
+      if (label == nullptr) {
+        return;
+      }
+      label->setText(text);
+      label->setFontSize(fontSize);
+      label->setColor(color);
+      label->setVisible(m_showLabel);
+      label->measure(renderer);
+    };
+    applyInline(m_labelOnFill, colorSpecFromRole(ColorRole::Surface));
+    applyInline(m_labelOnEmpty, fgColor);
+    if (m_labelOnFill != nullptr) {
+      m_inlineLabelW = m_labelOnFill->width();
+      m_inlineLabelH = m_labelOnFill->height();
     }
 
     // Overlay glyph — state icon
@@ -426,9 +481,6 @@ void BatteryWidget::syncState(Renderer& renderer) {
       }
     }
 
-    if (m_overlayLabel != nullptr) {
-      m_overlayLabel->setVisible(m_showLabel);
-    }
     if (m_overlayGlyph != nullptr) {
       m_overlayGlyph->setVisible(stateGlyph != nullptr);
     }
